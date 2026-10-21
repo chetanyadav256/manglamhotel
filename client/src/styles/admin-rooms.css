@@ -1,0 +1,63 @@
+.admin-room-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.admin-topbar .admin-brand, .admin-topbar .admin-logout { flex-shrink: 0; }
+.admin-topbar .admin-account { min-width: 0; }
+.admin-topbar .admin-account > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.admin-room-actions .button:disabled, .admin-room-form button:disabled { opacity: .6; cursor: not-allowed; }
+.admin-room-notice { margin-top: 24px; padding: 16px; border: 1px solid #b5c8ac; background: #edf3e8; color: #24482f; line-height: 1.6; overflow-wrap: anywhere; }
+.admin-room-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; padding: 24px 0; }
+.admin-room-filters > div { flex: 1 1 180px; min-width: 0; }
+.admin-room-filters label, .admin-room-form label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.admin-room-filters input, .admin-room-filters select, .admin-room-form input, .admin-room-form textarea { width: 100%; min-width: 0; min-height: 48px; padding: 12px; border: 1px solid #c9c4b8; border-radius: 3px; color: var(--color-forest); background: var(--color-paper); font: inherit; }
+.admin-room-form textarea { resize: vertical; }
+.admin-room-form input[aria-invalid=true], .admin-room-form textarea[aria-invalid=true] { border-color: #8b2f29; }
+.admin-room-list { display: grid; gap: 18px; }
+.admin-room-row { padding: 24px; background: var(--color-paper); border: 1px solid var(--color-line); border-radius: 4px; min-width: 0; overflow-wrap: anywhere; }
+.admin-room-row h2 { margin: 14px 0 10px; font: 26px/1.3 var(--font-display); }
+.admin-room-status { display: inline-block; padding: 6px 10px; border-radius: 4px; font-size: 12px; line-height: 1.5; background: #efe5d2; color: #705323; }
+.status-published { background: #e1efdc; color: #24522b; }
+.status-archived { background: #e9e7e3; color: #59584f; }
+.admin-room-dates { display: flex; flex-wrap: wrap; gap: 16px 32px; margin: 20px 0; font-size: 12px; color: var(--color-muted); }
+.admin-room-dates dt { font-weight: 600; margin-bottom: 6px; }
+.admin-room-pagination { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; padding-top: 24px; font-size: 13px; }
+.admin-management-state { margin-top: 24px; padding: 28px; border: 1px solid var(--color-line); line-height: 1.8; background: var(--color-paper); }
+.admin-room-form { margin-top: 28px; padding: clamp(18px, 3vw, 32px); background: var(--color-paper); border: 1px solid var(--color-line); }
+.admin-room-form fieldset { min-width: 0; }
+.admin-room-form label { margin-top: 24px; }
+.admin-room-form label span { font-weight: 400; }
+.admin-field-hint { margin-top: 9px; font-size: 12px; line-height: 1.8; color: var(--color-muted); }
+.admin-form-columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 24px; }
+.admin-amenity-input { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.admin-amenity-input input { flex: 1 1 150px; width: auto; }
+.admin-amenity-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.admin-amenity-list li { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; padding-left: 12px; border: 1px solid var(--color-line); background: var(--color-sand); font-size: 13px; }
+.admin-amenity-list span { overflow-wrap: anywhere; min-width: 0; }
+.admin-amenity-list button { flex-shrink: 0; min-height: 44px; padding: 10px; text-decoration: underline; text-underline-offset: 3px; }
+.admin-room-images { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--color-line); }
+.admin-room-images h2 { font: 24px var(--font-display); }
+.admin-image-count { margin-top: 14px; color: var(--color-muted); font-size: 13px; }
+.admin-image-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; margin-top: 18px; }
+.admin-image-card { min-width: 0; overflow: hidden; border: 1px solid var(--color-line); background: var(--color-paper); }
+.admin-image-preview { display: grid; min-height: 170px; aspect-ratio: 4 / 3; place-items: center; background: var(--color-sand); color: var(--color-muted); }
+.admin-image-preview img { width: 100%; height: 100%; min-height: 170px; object-fit: cover; }
+.admin-image-card-content { padding: 14px; }
+.admin-image-alt { min-height: 22px; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; }
+.admin-image-main { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; color: #705323; font-size: 12px; font-weight: 600; }
+.admin-image-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.admin-image-actions .button { min-height: 44px; gap: 6px; padding: 8px 10px; font-size: 12px; }
+.admin-image-upload { margin-top: 20px; padding: 18px; border: 1px dashed #bcb29f; background: #fbf9f3; }
+.admin-image-upload input[type=file] { display: block; width: 100%; margin-top: 8px; padding: 10px; }
+.admin-image-selection { display: grid; gap: 14px; margin-top: 18px; }
+.admin-image-selected { display: grid; min-width: 0; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 14px; }
+.admin-image-selected img { width: 96px; height: 76px; object-fit: cover; background: var(--color-sand); }
+.admin-image-selected > div { min-width: 0; }
+.admin-image-selected p { overflow-wrap: anywhere; font-size: 12px; }
+.admin-image-selected label { margin-top: 8px !important; font-size: 12px !important; }
+.admin-image-selected input { min-height: 44px !important; }
+.admin-image-success { margin-top: 14px; color: #24522b; font-size: 13px; line-height: 1.6; }
+.admin-confirm-dialog { position: fixed; inset: 0; margin: auto; max-height: calc(100dvh - 32px); width: min(480px, calc(100% - 32px)); padding: 28px; overflow-y: auto; border: 1px solid var(--color-line); border-radius: 5px; background: var(--color-paper); color: var(--color-forest); }
+.admin-confirm-dialog::backdrop { background: #10261f99; }
+.admin-confirm-dialog h2 { font: 28px/1.2 var(--font-display); }
+.admin-dialog-description { margin: 20px 0 24px; font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.admin-dialog-description p + p { margin-top: 12px; }
+@media (min-width: 1100px) { .admin-form-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .admin-room-row { padding: 18px; } }

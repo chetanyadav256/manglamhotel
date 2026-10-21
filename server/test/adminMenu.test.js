@@ -1,0 +1,199 @@
+import assert from 'node:assert/strict';
+import { afterEach, beforeEach, test } from 'node:test';
+import { fixtureOrigin, startRoomFixture } from '../../tests/fixtures/roomServer.js';
+import { validateMenuBody } from '../src/routes/adminMenu.js';
+import MenuCategory from '../src/models/MenuCategory.js';
+import MenuItem from '../src/models/MenuItem.js';
+
+let fixture;
+beforeEach(async () => { fixture = await startRoomFixture(); });
+afterEach(async () => { await fixture.close(); });
+const missing = 'a'.repeat(24);
+function request(path, method = 'GET', body, headers = {}) {
+  return fetch(`${fixture.url}/api/admin/menu/${path}`, {
+    method, headers: {
+      Cookie: `manglam_admin_session=${fixture.token}; manglam_admin_csrf=${fixture.csrf}`,
+      Origin: fixtureOrigin, 'X-CSRF-Token': fixture.csrf, 'Content-Type': 'application/json', ...headers,
+    }, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+async function create(kind, values) {
+  const response = await request(kind, 'POST', values);
+  assert.equal(response.status, 201, await response.clone().text());
+  return (await response.json()).data;
+}
+const category = (values = {}) => create('categories', { name: 'Fixture category', ...values });
+const item = (categoryId, values = {}) => create('items', { name: 'Fixture dish', category: categoryId, ...values });
+const data = async (path) => (await (await request(path)).json()).data;
+const publicData = async (kind) => (await (await fetch(`${fixture.url}/api/menu/${kind}`)).json()).data;
+
+test('all twelve endpoints require active sessions and mutations enforce CSRF, origin and JSON', async () => {
+  for (const kind of ['categories', 'items']) {
+    const cases = [[kind, 'GET'], [`${kind}/${missing}`, 'GET'], [kind, 'POST', {}], [`${kind}/${missing}`, 'PATCH', {}], [`${kind}/${missing}`, 'DELETE', {}], [`${kind}/${missing}/restore`, 'POST', {}]];
+    for (const [path, method, body] of cases) {
+      assert.equal((await request(path, method, body, { Cookie: '' })).status, 401);
+      if (method === 'GET') continue;
+      for (const headers of [{ 'X-CSRF-Token': '' }, { Origin: 'https://untrusted.example' }, { 'Sec-Fetch-Site': 'cross-site' }]) assert.equal((await request(path, method, body, headers)).status, 403);
+      assert.equal((await request(path, method, body, { 'Content-Type': 'text/plain' })).status, 415);
+    }
+  }
+  fixture.admin.isActive = false;
+  assert.equal((await request('categories')).status, 401);
+  assert.equal((await request('items')).status, 401);
+});
+
+test('category creation normalizes names, generates safe unique slugs and rejects duplicate names including legacy/archive', async () => {
+  const first = await category({ name: '  Fixture   & Category  ', description: ' Line one\nLine two ', displayOrder: 9 });
+  assert.equal(first.name, 'Fixture & Category'); assert.equal(first.slug, 'fixture-category');
+  assert.equal(first.isPublished, false); assert.equal(first.isArchived, false); assert.equal(first.displayOrder, 9);
+  assert.equal(first.description, 'Line one\nLine two'); assert.ok(first.createdAt); assert.ok(first.updatedAt);
+  assert.equal(Object.hasOwn(first, 'nameKey'), false);
+  const collision = await category({ name: 'Fixture-Category' });
+  assert.match(collision.slug, /^fixture-category-[a-f0-9]{12}$/);
+  assert.equal((await category({ name: 'भोजन' })).slug, 'category');
+  delete fixture.categories.get(first.id).nameKey;
+  assert.equal((await request('categories', 'POST', { name: 'fixture & category' })).status, 409);
+  await request(`categories/${first.id}`, 'DELETE', {});
+  assert.equal((await request('categories', 'POST', { name: first.name })).status, 409);
+  assert.equal(fixture.categories.size, 3);
+  const concurrent = await Promise.all([request('categories', 'POST', { name: 'Concurrent name' }), request('categories', 'POST', { name: ' concurrent NAME ' })]);
+  assert.deepEqual(concurrent.map(({ status }) => status).sort(), [201, 409]);
+});
+
+test('category validation rejects mass assignment and edits preserve slugs', async () => {
+  for (const body of [null, [], {}, { name: '' }, { name: 'x'.repeat(101) }, { name: 'Valid', description: 'x'.repeat(1001) }, { name: 'Valid', description: null }, { name: 'Valid', slug: 'injected' }, { name: 'Valid', nameKey: 'injected' }, { name: 'Valid', image: {} }, { name: 'Valid', isArchived: true }, { name: 'Valid', isPublished: true }, { name: 'Valid', displayOrder: 1.5 }, { name: 'Valid', displayOrder: -1 }]) assert.equal((await request('categories', 'POST', body)).status, 400);
+  const first = await category();
+  const other = await category({ name: 'Other category' });
+  assert.equal((await request(`categories/${first.id}`, 'PATCH', { name: ' Renamed category ', description: '', displayOrder: 3 })).status, 200);
+  const edited = await data(`categories/${first.id}`);
+  assert.equal(edited.name, 'Renamed category'); assert.equal(edited.slug, first.slug); assert.equal(edited.displayOrder, 3);
+  assert.equal((await request(`categories/${first.id}`, 'PATCH', { name: other.name })).status, 409);
+  assert.equal((await request(`categories/${first.id}`, 'PATCH', {})).status, 400);
+});
+
+test('menu items validate names, category references, prices and strict field allowlists', async () => {
+  const parent = await category();
+  for (const values of [{ name: '' }, { name: 'x'.repeat(151) }, { category: 'bad' }, { category: missing }, { category: null }, { price: -1 }, { price: '99' }, { price: true }, { price: 2.001 }, { price: 10000001 }, { vegetarian: 'true' }, { isAvailable: 1 }, { isPublished: true }, { isPublished: 'true' }, { image: {} }, { _id: missing }, { isArchived: true }, { $set: { price: 1 } }, { createdAt: 'date' }]) {
+    const response = await request('items', 'POST', { name: 'Fixture dish', category: parent.id, ...values });
+    assert.equal(response.status, 400, JSON.stringify(values));
+  }
+  for (const price of [NaN, Infinity]) assert.throws(() => validateMenuBody({ name: 'Test', category: parent.id, price }, 'items', true), /Price/);
+  assert.equal((await request('items', 'POST', { name: 'Missing category' })).status, 400);
+  assert.equal(fixture.items.size, 0);
+  await request(`categories/${parent.id}`, 'DELETE', {});
+  assert.equal((await request('items', 'POST', { name: 'Test', category: parent.id })).status, 409);
+});
+
+test('item editing supports optional and zero prices, tri-state vegetarian, category selection and preserves image metadata', async () => {
+  const parent = await category(); const other = await category({ name: 'Another' });
+  const dish = await item(parent.id, { price: 19.90, vegetarian: true });
+  assert.equal(dish.price, 19.9); assert.equal(dish.isAvailable, true); assert.equal(dish.isPublished, false); assert.equal(dish.isArchived, false);
+  const image = { url: 'https://example.test/fixture.jpg', publicId: 'fixture-only', alt: 'Test photograph' };
+  fixture.items.get(dish.id).image = image;
+  for (const vegetarian of [false, true, null]) {
+    assert.equal((await request(`items/${dish.id}`, 'PATCH', { vegetarian, category: other.id, name: 'Changed name', description: 'Edited description', displayOrder: 6 })).status, 200);
+    const edited = await data(`items/${dish.id}`); assert.equal(edited.vegetarian, vegetarian); assert.equal(edited.category, other.id);
+    assert.equal(edited.displayOrder, 6); assert.equal(edited.description, 'Edited description');
+  }
+  for (const price of [null, '', 0, 123.45]) {
+    assert.equal((await request(`items/${dish.id}`, 'PATCH', { price })).status, 200);
+    assert.equal((await data(`items/${dish.id}`)).price, price === '' ? null : price);
+  }
+  for (const price of [null, '', undefined]) assert.equal((await item(parent.id, { price })).price, null);
+  assert.equal((await item(parent.id)).vegetarian, null);
+  assert.deepEqual(fixture.items.get(dish.id).image, image);
+  for (const body of [{ image: null }, { slug: 'new' }, { category: missing }, { price: -5 }, {}]) assert.equal((await request(`items/${dish.id}`, 'PATCH', body)).status, 400);
+});
+
+test('public menu gates both item and parent publication/archive while preserving unavailable dishes', async () => {
+  const parent = await category(); const dish = await item(parent.id, { price: 100.25, vegetarian: true });
+  assert.deepEqual(await publicData('items'), []);
+  await request(`items/${dish.id}`, 'PATCH', { isPublished: true });
+  assert.deepEqual(await publicData('items'), []);
+  await request(`categories/${parent.id}`, 'PATCH', { isPublished: true });
+  assert.equal((await publicData('categories')).length, 1);
+  assert.equal((await publicData('items'))[0].priceInRupees, 100.25);
+  await request(`items/${dish.id}`, 'PATCH', { isAvailable: false });
+  let publicItem = (await publicData('items'))[0]; assert.equal(publicItem.isAvailable, false); assert.equal(publicItem.isVegetarian, true);
+  await request(`items/${dish.id}`, 'PATCH', { price: null, vegetarian: null });
+  publicItem = (await publicData('items'))[0]; assert.equal(Object.hasOwn(publicItem, 'priceInRupees'), false); assert.equal(Object.hasOwn(publicItem, 'isVegetarian'), false);
+  await request(`categories/${parent.id}`, 'PATCH', { isPublished: false });
+  assert.deepEqual(await publicData('items'), []);
+  await request(`categories/${parent.id}`, 'PATCH', { isPublished: true });
+  await request(`categories/${parent.id}`, 'DELETE', {});
+  assert.deepEqual(await publicData('categories'), []); assert.deepEqual(await publicData('items'), []);
+  assert.equal(fixture.items.get(dish.id).isPublished, true); assert.equal(fixture.items.size, 1);
+  assert.equal((await request(`categories/${parent.id}`, 'PATCH', { isPublished: true })).status, 409);
+  assert.equal((await request(`items/${dish.id}`, 'PATCH', { isPublished: true })).status, 409);
+  fixture.categories.get(parent.id).isPublished = true; // Inconsistent legacy archived data remains hidden.
+  assert.deepEqual(await publicData('items'), []);
+  const restored = await request(`categories/${parent.id}/restore`, 'POST', {});
+  assert.equal((await restored.json()).data.isPublished, false); assert.deepEqual(await publicData('items'), []);
+  await request(`categories/${parent.id}`, 'PATCH', { isPublished: true });
+  await request(`items/${dish.id}`, 'PATCH', { isPublished: false }); assert.deepEqual(await publicData('items'), []);
+  await request(`items/${dish.id}`, 'PATCH', { isPublished: true });
+  assert.equal((await publicData(`items?category=${parent.id}`)).length, 1);
+  const response = await fetch(`${fixture.url}/api/menu/items`); assert.equal(response.headers.get('cache-control'), 'no-store');
+});
+
+test('item soft archive and restore enforce draft and category rules without deleting records', async () => {
+  const parent = await category(); const dish = await item(parent.id);
+  await request(`items/${dish.id}`, 'PATCH', { isPublished: true });
+  await request(`items/${dish.id}`, 'DELETE', {});
+  assert.equal(fixture.items.size, 1); assert.equal(fixture.items.get(dish.id).isPublished, false);
+  for (const body of [{ isPublished: true }, { name: 'Changed' }, { isAvailable: false }]) assert.equal((await request(`items/${dish.id}`, 'PATCH', body)).status, 409);
+  fixture.items.get(dish.id).isPublished = true;
+  await request(`categories/${parent.id}`, 'PATCH', { isPublished: true });
+  assert.deepEqual(await publicData('items'), []);
+  await request(`categories/${parent.id}`, 'DELETE', {});
+  assert.equal((await request(`items/${dish.id}/restore`, 'POST', {})).status, 409);
+  await request(`categories/${parent.id}/restore`, 'POST', {});
+  const restored = (await (await request(`items/${dish.id}/restore`, 'POST', {})).json()).data;
+  assert.equal(restored.isPublished, false); assert.equal(restored.isArchived, false);
+  assert.equal((await request(`items/${dish.id}/restore`, 'POST', {})).status, 409);
+  assert.equal((await request(`categories/${parent.id}/restore`, 'POST', {})).status, 409);
+});
+
+test('lists paginate, search literally and filter archive/publication/category/availability including legacy records', async () => {
+  const parent = await category(); const other = await category({ name: 'Other', displayOrder: 10 });
+  const first = await item(parent.id, { name: 'Fixture [dish]', displayOrder: 5, isAvailable: false });
+  const second = await item(other.id, { name: 'Early dish', displayOrder: 0 });
+  delete fixture.categories.get(parent.id).isArchived; delete fixture.items.get(first.id).isArchived;
+  await request(`items/${first.id}`, 'PATCH', { isPublished: true });
+  assert.equal((await data('items?limit=1'))[0].id, second.id);
+  assert.equal((await data('items?limit=1&page=2'))[0].id, first.id);
+  assert.equal((await data('items?search=%5Bdish%5D'))[0].id, first.id);
+  assert.equal((await data('items?availability=unavailable&publication=published'))[0].id, first.id);
+  assert.equal((await data(`items?category=${other.id}`))[0].id, second.id);
+  assert.equal((await data('items?publication=draft&availability=available'))[0].id, second.id);
+  await request(`items/${first.id}`, 'DELETE', {});
+  assert.equal((await data('items?status=archived'))[0].id, first.id);
+  assert.equal((await data('items?status=all')).length, 2);
+  assert.equal((await data('categories?limit=1'))[0].id, parent.id);
+  for (const kind of ['categories', 'items']) for (const query of ['?page=0', '?limit=101', '?status=bad', '?publication=bad', '?search=x&search=y', '?unknown=x']) assert.equal((await request(`${kind}${query}`)).status, 400);
+  assert.equal((await request('items?category=bad')).status, 400); assert.equal((await request('items?availability=bad')).status, 400);
+});
+
+test('invalid/deleted IDs and database failures return safe errors', async () => {
+  for (const kind of ['categories', 'items']) {
+    for (const [method, suffix, body] of [['GET', '', undefined], ['PATCH', '', { name: 'Edited' }], ['DELETE', '', {}], ['POST', '/restore', {}]]) {
+      assert.equal((await request(`${kind}/invalid${suffix}`, method, body)).status, 400);
+      assert.equal((await request(`${kind}/${missing}${suffix}`, method, body)).status, 404);
+    }
+    fixture.state.menuFailure = Object.assign(new Error('private database details'), { name: 'MongoNetworkError' });
+    for (const [path, method, body] of [[kind, 'GET'], [kind, 'POST', { name: 'Test', ...(kind === 'items' ? { category: missing } : {}) }], [`${kind}/${missing}`, 'PATCH', { name: 'Edited' }]]) {
+      const response = await request(path, method, body); assert.equal(response.status, 503); assert.equal((await response.text()).includes('private'), false);
+    }
+    fixture.state.menuFailure = new Error('private unexpected details');
+    const response = await request(kind); assert.equal(response.status, 500); assert.equal((await response.text()).includes('private'), false);
+    fixture.state.menuFailure = null;
+  }
+});
+
+test('schemas default to unarchived drafts and category names have an indexed uniqueness guard', async () => {
+  const parent = new MenuCategory({ name: 'Fixture', slug: 'fixture' }); await parent.validate();
+  assert.equal(parent.isArchived, false); assert.equal(parent.isPublished, false);
+  const dish = new MenuItem({ name: 'Fixture', category: parent._id }); await dish.validate();
+  assert.equal(dish.isArchived, false); assert.equal(dish.isPublished, false); assert.equal(dish.isAvailable, true); assert.equal(dish.vegetarian, undefined);
+  assert.ok(MenuCategory.schema.indexes().some(([fields, options]) => fields.nameKey && options.unique && options.partialFilterExpression));
+});

@@ -1,0 +1,35 @@
+{
+  "name": "manglam-hotel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others --names api,web \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "npm run dev --workspace @manglam/client",
+    "dev:server": "npm run dev --workspace @manglam/server",
+    "build": "npm run build --workspace @manglam/client",
+    "preview": "npm run preview --workspace @manglam/client",
+    "start": "npm run start --workspace @manglam/server",
+    "lint": "eslint . --max-warnings 0",
+    "test": "npm run test --workspace @manglam/server",
+    "check": "npm run lint && npm test && npm run build",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0"
+  }
+}
