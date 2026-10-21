@@ -43,7 +43,14 @@ export function createApp(options = {}) {
   application.set('trust proxy', adminConfig.trustProxyHops ?? 0);
   application.set('query parser', 'simple');
   application.use(requestIdHandler);
-  application.use(helmet());
+  // Preserve Helmet's default CSP while permitting images served by ImageKit.
+  application.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        imgSrc: ["'self'", 'data:', 'https://ik.imagekit.io'],
+      },
+    },
+  }));
   application.use(express.json({ limit: '32kb' }));
   application.use('/api/health', healthRouter);
   application.use('/api/admin', createAdminAuthRouter({
