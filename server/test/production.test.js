@@ -99,3 +99,18 @@ test('production deployment continues to return JSON for unknown API routes', as
   assert.match(response.headers.get('content-type'), /application\/json/);
   assert.deepEqual(await response.json(), { error: { message: 'Route not found.' } });
 });
+
+test('production CSP permits ImageKit CDN images without broadening other directives', async () => {
+  const response = await fetch(`${baseUrl}/rooms`, { headers: { Accept: 'text/html' } });
+  assert.equal(response.status, 200);
+  const policy = response.headers.get('content-security-policy');
+  assert.ok(policy);
+  const directives = Object.fromEntries(policy.split(';').map((part) => part.trim()).filter(Boolean).map((part) => {
+    const [name, ...values] = part.split(/\s+/);
+    return [name, values];
+  }));
+  assert.deepEqual(directives['img-src'], ["'self'", 'data:', 'https://ik.imagekit.io']);
+  assert.ok(directives['default-src']?.includes("'self'"));
+  assert.ok(directives['object-src']?.includes("'none'"));
+  assert.ok(!directives['script-src']?.includes('https://ik.imagekit.io'));
+});
