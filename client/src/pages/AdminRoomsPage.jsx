@@ -56,7 +56,6 @@ export default function AdminRoomsPage() {
 
   return (
     <>
-      <title>Manage rooms | Manglam Hotel &amp; Restaurant</title>
       <p className="eyebrow">Administration</p><h1>Rooms Management</h1>
       <p className="admin-dashboard-lede">Manage details, prices and publication. Archiving keeps room records safe.</p>
       <div className="admin-room-actions mt-6"><Link to="/admin/rooms/new" className="button button-primary">Add room</Link><Link to="/rooms" className="button button-outline">View public rooms</Link></div>

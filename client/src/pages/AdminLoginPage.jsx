@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { LoaderCircle, LockKeyhole } from 'lucide-react';
 import { useAdminAuth } from '../app/useAdminAuth.js';
+import AdminMetadata from '../components/seo/AdminMetadata.jsx';
 import '../styles/admin.css';
 
 export default function AdminLoginPage() {
@@ -38,6 +39,7 @@ export default function AdminLoginPage() {
     <main className="admin-login-page">
       <a href="#admin-login-form" className="skip-link">Skip to sign in</a>
       <section className="admin-login-card" aria-labelledby="admin-login-title">
+        <AdminMetadata />
         <Link className="admin-brand" to="/" aria-label="Manglam Hotel & Restaurant home">
           <span>MANGLAM<span className="brand-dot">.</span></span>
           <small>HOTEL &amp; RESTAURANT</small>
@@ -45,8 +47,6 @@ export default function AdminLoginPage() {
         <span className="admin-login-icon" aria-hidden="true"><LockKeyhole size={22} /></span>
         <p className="eyebrow">Secure administration</p>
         <h1 id="admin-login-title">Welcome back</h1>
-        <meta name="robots" content="noindex, nofollow" />
-        <title>Admin login | Manglam Hotel &amp; Restaurant</title>
         <p className="admin-login-intro">Sign in to continue to the Manglam management dashboard.</p>
         <form id="admin-login-form" onSubmit={handleSubmit} noValidate>
           <label htmlFor="admin-email">Email address</label>

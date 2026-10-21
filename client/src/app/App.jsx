@@ -1,19 +1,22 @@
+import { lazy, Suspense } from 'react';
 import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider } from 'react-router';
-import SiteLayout from '../components/layout/SiteLayout.jsx';
-import HomePage from '../pages/HomePage.jsx';
-import RoomsPage from '../pages/RoomsPage.jsx';
-import RestaurantPage from '../pages/RestaurantPage.jsx';
-import ContactPage from '../pages/ContactPage.jsx';
-import NotFoundPage from '../pages/NotFoundPage.jsx';
-import AdminLoginPage from '../pages/AdminLoginPage.jsx';
-import AdminDashboardPage from '../pages/AdminDashboardPage.jsx';
-import AdminAuthProvider from './AdminAuthContext.jsx';
-import AdminGuard from '../components/admin/AdminGuard.jsx';
-import AdminLayout from '../components/admin/AdminLayout.jsx';
-import AdminRoomsPage from '../pages/AdminRoomsPage.jsx';
-import AdminRoomEditorPage from '../pages/AdminRoomEditorPage.jsx';
-import AdminRestaurantPage from '../pages/AdminRestaurantPage.jsx';
-import AdminMenuEditorPage from '../pages/AdminMenuEditorPage.jsx';
+
+const SiteLayout = lazy(() => import('../components/layout/SiteLayout.jsx'));
+const HomePage = lazy(() => import('../pages/HomePage.jsx'));
+const RoomsPage = lazy(() => import('../pages/RoomsPage.jsx'));
+const RestaurantPage = lazy(() => import('../pages/RestaurantPage.jsx'));
+const ContactPage = lazy(() => import('../pages/ContactPage.jsx'));
+const NotFoundPage = lazy(() => import('../pages/NotFoundPage.jsx'));
+const AdminLoginPage = lazy(() => import('../pages/AdminLoginPage.jsx'));
+const AdminDashboardPage = lazy(() => import('../pages/AdminDashboardPage.jsx'));
+const AdminAuthProvider = lazy(() => import('./AdminAuthContext.jsx'));
+const AdminGuard = lazy(() => import('../components/admin/AdminGuard.jsx'));
+const AdminLayout = lazy(() => import('../components/admin/AdminLayout.jsx'));
+const AdminRoomsPage = lazy(() => import('../pages/AdminRoomsPage.jsx'));
+const AdminRoomEditorPage = lazy(() => import('../pages/AdminRoomEditorPage.jsx'));
+const AdminRestaurantPage = lazy(() => import('../pages/AdminRestaurantPage.jsx'));
+const AdminMenuEditorPage = lazy(() => import('../pages/AdminMenuEditorPage.jsx'));
+const AdminSettingsPage = lazy(() => import('../pages/AdminSettingsPage.jsx'));
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -39,6 +42,7 @@ const router = createBrowserRouter(
             <Route path="restaurant/categories/:id/edit" element={<AdminMenuEditorPage key="category-edit" kind="categories" />} />
             <Route path="restaurant/items/new" element={<AdminMenuEditorPage key="item-new" kind="items" />} />
             <Route path="restaurant/items/:id/edit" element={<AdminMenuEditorPage key="item-edit" kind="items" />} />
+            <Route path="settings" element={<AdminSettingsPage />} />
           </Route>
         </Route>
       </Route>
@@ -47,5 +51,9 @@ const router = createBrowserRouter(
 );
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <Suspense fallback={<main className="page-container py-12" role="status">Loading page…</main>}>
+      <RouterProvider router={router} />
+    </Suspense>
+  );
 }

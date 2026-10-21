@@ -13,7 +13,6 @@ export default function AdminMenuEditorPage({ kind }) {
   const listPath = item ? '/admin/restaurant/items' : '/admin/restaurant';
   const error = record.error || categories.error;
   return <>
-    <title>{id ? 'Edit' : 'Add'} {item ? 'menu item' : 'category'} | Manglam Hotel &amp; Restaurant</title>
     <p className="eyebrow">Restaurant Management</p><h1>{id ? 'Edit' : 'Add'} {item ? 'menu item' : 'category'}</h1>
     {error ? <ManagementState error={error} onRetry={() => { record.retry(); categories.retry(); }} />
       : (id && !record.result) || (item && !categories.result) ? <ManagementState>Loading menu details…</ManagementState>

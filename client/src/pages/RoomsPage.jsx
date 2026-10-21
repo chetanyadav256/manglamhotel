@@ -12,8 +12,6 @@ export default function RoomsPage() {
 
   return (
     <>
-      <title>Rooms & Accommodation | Manglam Hotel & Restaurant</title>
-      <meta name="description" content="Enquire about rooms at Manglam Hotel & Restaurant in Kalwad, Rajasthan. Contact our team for room details, current prices and availability." />
       <RoomsHero />
       <RoomsListing rooms={rooms ?? []} error={error} loading={loading} onRetry={retry} />
       <RoomContactBanner />

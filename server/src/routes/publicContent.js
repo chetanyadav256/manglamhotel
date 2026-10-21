@@ -98,15 +98,32 @@ function isHttpsUrl(value) {
 }
 
 function validSiteSettings(settings) {
+  const instagram = safeSettingsUrl(settings.instagramUrl, new Set(['www.instagram.com', 'instagram.com']), /^\/[A-Za-z0-9._-]{1,30}\/?$/);
+  const maps = safeSettingsUrl(settings.googleMapsUrl, new Set(['www.google.com', 'google.com', 'maps.google.com']), /^\/maps\/place\/.+/);
   return typeof settings.hotelName === 'string'
+    && settings.hotelName.trim().length > 0
+    && settings.hotelName.length <= 120
     && Array.isArray(settings.phoneNumbers)
-    && settings.phoneNumbers.length > 0
-    && settings.phoneNumbers.every((phone) => typeof phone === 'string' && /^\+?[0-9][0-9\s()-]{5,24}$/.test(phone))
+    && settings.phoneNumbers.length === 2
+    && settings.phoneNumbers.every((phone) => typeof phone === 'string' && /^\+91 [6-9]\d{9}$/.test(phone))
     && typeof settings.instagramUrl === 'string'
-    && /^https:\/\/www\.instagram\.com\/[A-Za-z0-9._-]+\/?$/.test(settings.instagramUrl)
+    && instagram
     && typeof settings.address === 'string'
+    && settings.address.trim().length > 0
+    && settings.address.length <= 500
     && typeof settings.googleMapsUrl === 'string'
-    && /^https:\/\/www\.google\.com\/maps\//.test(settings.googleMapsUrl);
+    && maps;
+}
+
+function safeSettingsUrl(value, allowedHosts, pathPattern) {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && allowedHosts.has(url.hostname.toLowerCase())
+      && !url.username && !url.password && !url.port && pathPattern.test(url.pathname);
+  } catch {
+    return false;
+  }
 }
 
 export function createPublicContentRouter({ models, isDatabaseReady }) {
@@ -176,6 +193,7 @@ export function createPublicContentRouter({ models, isDatabaseReady }) {
   });
 
   router.get('/site-settings', async (_request, response) => {
+    response.set('Cache-Control', 'no-store');
     requireDatabase(isDatabaseReady);
     const settings = await models.SiteSettings.findOne({ singletonKey: 'primary' })
       .select('hotelName phoneNumbers instagramUrl address googleMapsUrl')

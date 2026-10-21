@@ -168,8 +168,9 @@ For manual checks, use only approved hotel menu content:
     retaining menu filtering, INR prices, vegetarian indicators and availability
     labels. Do not use a test photo against the live ImageKit account.
 
-Website Settings remain deferred. Room management and room image upload behavior
-are unchanged.
+Website settings are managed separately at `/admin/settings`; see
+[Website settings management](admin-settings.md). Room management and room
+image upload behavior are unchanged.
 
 ## Files in this phase
 

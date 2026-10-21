@@ -1,0 +1,38 @@
+.admin-settings-form {
+  max-width: 780px;
+  margin-top: 28px;
+  padding: clamp(18px, 3vw, 32px);
+  border: 1px solid var(--color-line);
+  background: var(--color-paper);
+}
+
+.admin-settings-form fieldset { min-width: 0; }
+.admin-settings-form label { display: block; margin-top: 22px; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
+.admin-settings-form input, .admin-settings-form textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px;
+  border: 1px solid #c9c4b8;
+  border-radius: 3px;
+  background: var(--color-paper);
+  color: var(--color-forest);
+  font: inherit;
+}
+.admin-settings-form textarea { resize: vertical; }
+.admin-settings-form input[aria-invalid="true"], .admin-settings-form textarea[aria-invalid="true"] { border-color: #8b2f29; }
+.admin-settings-columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 24px; }
+.admin-settings-success, .admin-settings-error {
+  margin-top: 22px;
+  padding: 14px 16px;
+  border: 1px solid #b5c8ac;
+  background: #edf3e8;
+  color: #24482f;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.admin-settings-error { border-color: #d6aaa5; background: #fbefed; color: #8b2f29; }
+
+@media (min-width: 720px) {
+  .admin-settings-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

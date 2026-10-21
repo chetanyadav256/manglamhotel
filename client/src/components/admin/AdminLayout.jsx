@@ -2,13 +2,14 @@ import { useEffect, useRef } from 'react';
 import { Link, NavLink, Outlet, ScrollRestoration, useLocation, useNavigate } from 'react-router';
 import { ArrowLeft, BedDouble, LayoutDashboard, LogOut, Settings2, Utensils } from 'lucide-react';
 import { useAdminAuth } from '../../app/useAdminAuth.js';
+import AdminMetadata from '../seo/AdminMetadata.jsx';
 import '../../styles/admin.css';
 
 const links = [
   { label: 'Overview', icon: LayoutDashboard, to: '/admin' },
   { label: 'Rooms Management', icon: BedDouble, to: '/admin/rooms' },
   { label: 'Restaurant Management', icon: Utensils, to: '/admin/restaurant' },
-  { label: 'Website Settings', icon: Settings2 },
+  { label: 'Website Settings', icon: Settings2, to: '/admin/settings' },
 ];
 
 export default function AdminLayout() {
@@ -24,7 +25,7 @@ export default function AdminLayout() {
 
   return (
     <main className="admin-dashboard">
-      <meta name="robots" content="noindex, nofollow" />
+      <AdminMetadata />
       <a href="#admin-content" className="skip-link">Skip to dashboard</a>
       <header className="admin-topbar">
         <Link className="admin-brand" to="/" aria-label="Manglam Hotel & Restaurant home"><span>MANGLAM<span className="brand-dot">.</span></span><small>HOTEL &amp; RESTAURANT</small></Link>
@@ -34,9 +35,9 @@ export default function AdminLayout() {
         <aside className="admin-sidebar" aria-label="Administration">
           <p className="admin-sidebar-label">Workspace</p>
           <nav aria-label="Admin navigation">
-            {links.map(({ label, icon: Icon, to }) => to
-              ? <NavLink key={label} to={to} end={to === '/admin'} className="admin-nav-item"><Icon size={18} aria-hidden="true" /><span>{label}</span></NavLink>
-              : <button key={label} type="button" className="admin-nav-item" disabled><Icon size={18} aria-hidden="true" /><span>{label}</span><span className="admin-coming-soon">Soon</span></button>)}
+            {links.map(({ label, icon: Icon, to }) => (
+              <NavLink key={label} to={to} end={to === '/admin'} className="admin-nav-item"><Icon size={18} aria-hidden="true" /><span>{label}</span></NavLink>
+            ))}
           </nav>
           <Link className="admin-back-link" to="/"><ArrowLeft size={16} aria-hidden="true" />Back to website</Link>
         </aside>

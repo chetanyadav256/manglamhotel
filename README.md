@@ -7,8 +7,8 @@ records and remain empty until verified hotel content is added. `/admin` is
 protected by database-backed sessions. `/admin/rooms` supports room creation,
 editing, publication, soft archive and restoration. `/admin/restaurant` supports
 category and dish management, prices, availability, publication and soft archive.
-Saved dishes support protected ImageKit photo management. Website settings
-management remains reserved for a later phase.
+Saved dishes support protected ImageKit photo management. Admins can update
+public hotel details through protected website settings management.
 
 ## Requirements and quick start
 
@@ -43,7 +43,7 @@ If changing the API `PORT`, update the client's `API_PROXY_TARGET` to match.
 | `npm test` | Node's native API/config tests |
 | `npm run build` | Build the frontend into `client/dist` |
 | `npm run check` | Lint, tests, then frontend production build |
-| `npm run test:e2e` | Chromium responsive, navigation, contact and admin auth UI checks |
+| `npm run test:e2e` | Chromium responsive, navigation, metadata and admin UI checks |
 | `npm run preview` | Preview the built frontend on port 4173 |
 | `npm start` | Start Express without watch mode |
 | `npm run seed:site-settings --workspace @manglam/server` | Insert initial public contact settings only when absent |
@@ -75,6 +75,7 @@ client/
     app/                 Route definitions and admin auth context
     components/admin/    Protected layout, reusable room form/cards and dialogs
     components/layout/   Shared header, navigation and footer
+    components/seo/      Route metadata and hotel/restaurant structured data
     components/home/     Hero, selection cards, introduction and location
     components/ui/       Reusable page intro and action link
     config/              Owner-provided public contact details
@@ -91,7 +92,7 @@ server/
     config/              Environment validation and MongoDB connection
     models/              Content, SiteSettings, Admin, sessions and rate limits
     middleware/          JSON error handling
-    routes/              Health, public reads and protected admin room/menu APIs
+    routes/              Health, SEO, public reads and protected admin APIs
     services/             ImageKit storage, upload validation and cleanup
     security/             Admin session, CSRF, origin and rate-limit controls
     scripts/              Site settings seed and manual admin creation
@@ -100,16 +101,18 @@ AGENTS.md                Requirements and future engineering conventions
 eslint.config.js         Shared flat ESLint configuration
 playwright.config.js     Local browser test setup
 tests/e2e/               Responsive and navigation browser tests
+shared/                  Client/server route metadata and schema data
+docs/render-deployment.md Render production preparation and verification guide
 package.json             Workspace commands
 package-lock.json        Reproducible dependency tree
 ```
 
 ## Current behavior
 
-Routes: `/`, `/rooms`, `/restaurant`, `/contact`, `/admin/login`, `/admin`,
-`/admin/rooms`, `/admin/rooms/new`, `/admin/rooms/:id/edit`, `/admin/restaurant`,
-`/admin/restaurant/items`, category/item add/edit routes, and a fallback
-not-found page. The homepage presents Rooms & Availability and Restaurant.
+Routes include `/`, `/rooms`, `/restaurant`, `/contact`, `/admin/login`,
+`/admin`, `/admin/rooms`, `/admin/rooms/new`, `/admin/rooms/:id/edit`,
+`/admin/restaurant`, restaurant category/item routes, `/admin/settings`, and a
+fallback not-found page. The homepage presents Rooms & Availability and Restaurant.
 Room enquiries navigate to Contact. Contact shows the supplied phone numbers,
 Instagram, then address/Google Maps in that order.
 
@@ -123,8 +126,8 @@ The hero uses an original decorative SVG illustration, not a property photograph
 Room records and menu content have not yet been supplied. No property photographs,
 room types, amenities, dishes or prices have been invented. Admin login and a
 protected, noindex dashboard are present. Room and restaurant management,
-including optional restaurant photos, are implemented; website settings
-management is not implemented.
+including optional restaurant photos, and protected website settings management
+are implemented.
 
 Public database-backed endpoints:
 
@@ -133,7 +136,9 @@ Public database-backed endpoints:
 - `GET /api/menu/items?category=<category-id>` exposes published items whose
   categories are published and nonarchived; archived items are hidden and
   availability is returned separately.
-- `GET /api/site-settings` returns seeded confirmed contact details.
+- `GET /api/site-settings` returns approved public hotel settings only.
+- `GET /api/admin/site-settings` and `PATCH /api/admin/site-settings` provide
+  protected settings retrieval and revision-aware updates.
 
 List routes accept `page` and `limit` (maximum 100) and return `{ data,
 pagination }`. Collections remain empty until real published records are
@@ -148,7 +153,9 @@ lists; database-backed endpoints return 503 when MongoDB is unavailable.
 ```
 
 This checks API liveness only, not database readiness or room availability.
-Unknown endpoints return JSON 404 errors. Helmet provides baseline API
+Unknown API endpoints return JSON 404 errors; production serves the React SPA
+for frontend navigation paths and returns route-specific initial HTML metadata.
+Helmet provides baseline API
 security headers, JSON bodies are limited to 32 KB, public list pagination is
 capped, and errors omit stacks and database credentials.
 
@@ -161,6 +168,10 @@ Production requires a valid URI; development may start without one, in which
 case database-backed routes return 503. `client/.env` configures Vite. Any
 `VITE_*` variable is embedded into the public bundle: never put a server secret
 there. Environment files and generated artifacts are ignored by Git.
+Production additionally requires `IMAGEKIT_PRIVATE_KEY`,
+`ADMIN_ALLOWED_ORIGINS`, `PUBLIC_SITE_URL`, and the correct
+`TRUST_PROXY_HOPS`. Express binds to `0.0.0.0` in production. See the
+[Render deployment guide](docs/render-deployment.md) for exact settings.
 
 The server creates declared MongoDB indexes during startup and closes the
 connection during graceful shutdown. MongoDB TLS verification remains enabled.
@@ -171,8 +182,10 @@ startup connection fails, correct the network/configuration and restart the
 server. Database-backed APIs return 503 while the database is unavailable.
 The `seed:site-settings` command uses `$setOnInsert`; rerunning it leaves
 customized settings unchanged and never inserts room or menu records.
-ImageKit room photo uploads are implemented with a server-only private key;
-restaurant uploads remain out of scope.
+Settings edits update the singleton only, validate a strict field allowlist and
+reject stale revisions with HTTP 409. The public response contract does not
+expose the internal revision. ImageKit room and restaurant photo uploads use a
+server-only private key.
 
 ## Admin authentication foundation
 
@@ -226,7 +239,15 @@ selection and deletion; arbitrary image URL editing is not available.
 See [Admin room management](docs/admin-rooms.md) for endpoints, validation rules,
 changed files, test isolation, and exact manual testing steps. `npm run check`
 runs lint/API tests/build; `npm run test:e2e` runs browser checks including the
-admin-to-public room lifecycle against an isolated fixture server.
+admin-to-public room and settings workflows against isolated fixture APIs.
+
+## Website settings management
+
+Open `/admin/settings` after signing in to update the public hotel name, phone
+numbers, Instagram profile, address and Google Maps listing. Settings saves use
+the existing session/CSRF protections and revision checks; public settings
+remain read-only. See [Website settings management](docs/admin-settings.md) for
+validation rules, endpoints and manual verification.
 
 ### ImageKit photo storage
 
@@ -358,17 +379,21 @@ when unavailable.
 
 ## Future deployment
 
-For future hosting, serve `client/dist` with a client-route fallback to
-`index.html`, and proxy `/api` to the Express process on the same origin.
-The API does not serve frontend assets. Configure production TLS, process
-supervision, `NODE_ENV=production` and `HOST` for the target environment.
-Review proxy trust, security headers, request limits and access controls when
-features and hosting are introduced. No deployment is configured in this phase.
+The production server serves the built `client/dist` assets and the Express API
+from the same origin, with an SPA fallback for client routes. Configure
+`NODE_ENV=production`, the exact HTTPS origins, `PUBLIC_SITE_URL`,
+`TRUST_PROXY_HOPS`, and the server-only MongoDB Atlas and ImageKit credentials.
+No deployment has been performed. See
+[Render production preparation](docs/render-deployment.md) for the verified
+single-service configuration and Free-tier limitations.
 
-Semantic markup and route-specific React metadata provide a basic SEO
-foundation. Domain-specific canonical links, sitemap, social images,
-prerendering and correct HTTP status for unknown frontend routes remain
-deployment-phase decisions.
+Semantic markup and route-specific metadata provide an SEO foundation.
+Configure `PUBLIC_SITE_URL` in production to enable canonical URLs, sitemap,
+and Open Graph URLs. Admin routes are noindex. The public pages remain a
+client-rendered SPA rather than full SSR/prerendering, and no social image is
+configured until an approved asset/domain is provided. See
+[Render production preparation](docs/render-deployment.md) for deployment
+configuration and Free-tier SEO limitations.
 
 Setup follows the official [Vite](https://vite.dev/guide/),
 [Tailwind Vite](https://tailwindcss.com/docs/installation/using-vite),

@@ -16,11 +16,6 @@ export default function RestaurantPage() {
 
   return (
     <>
-      <title>Restaurant Menu | Manglam Hotel &amp; Restaurant</title>
-      <meta
-        name="description"
-        content="Explore the restaurant menu at Manglam Hotel & Restaurant in Kalwad, Rajasthan."
-      />
       <section className="restaurant-hero" aria-labelledby="restaurant-heading">
         <p className="eyebrow">Restaurant</p>
         <h1 id="restaurant-heading">Manglam Restaurant</h1>

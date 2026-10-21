@@ -24,7 +24,6 @@ export default function AdminRoomEditorPage() {
     return () => { clearTimeout(task); controller.abort(); };
   }, [id, request, retry]);
   return <>
-    <title>{id ? 'Edit room' : 'Add room'} | Manglam Hotel &amp; Restaurant</title>
     <p className="eyebrow">Rooms Management</p><h1>{id ? 'Edit room' : 'Add room'}</h1>
     {error ? <><ManagementState error={error} onRetry={() => setRetry((value) => value + 1)} /><Link to="/admin/rooms" className="button button-outline mt-4">Back to rooms</Link></>
       : id && loaded?.id !== id ? <ManagementState loading />

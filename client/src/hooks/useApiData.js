@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export default function useApiData(loadData) {
+export default function useApiData(loadData, dependencyKey) {
   const [requestKey, setRequestKey] = useState(0);
   const [state, setState] = useState({
     data: null,
@@ -23,7 +23,7 @@ export default function useApiData(loadData) {
       });
 
     return () => controller.abort();
-  }, [loadData, requestKey]);
+  }, [loadData, requestKey, dependencyKey]);
 
   const retry = useCallback(() => setRequestKey((key) => key + 1), []);
   const currentState = state.requestKey === requestKey

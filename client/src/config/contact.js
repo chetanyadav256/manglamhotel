@@ -1,5 +1,6 @@
 // Owner-provided information. Preserve this order on the Contact page.
 export const contact = {
+  hotelName: 'Manglam Hotel & Restaurant',
   phones: [
     { label: '+91 7568647755', href: 'tel:+917568647755' },
     { label: '+91 9828809155', href: 'tel:+919828809155' },

@@ -13,7 +13,8 @@ or couple it to the owner's Manglam Furniture project.
   Restaurant pages, Mongoose models, published-content read-only APIs, and
   protected admin authentication/dashboard, room management and protected room
   photo management, plus protected restaurant category/item and photo management.
-  Website settings management requires a later request.
+  Protected website settings management edits the single seeded public hotel
+  settings document while preserving the read-only public settings API.
 - Homepage must prominently offer **Rooms & Availability** and **Restaurant**.
 - Rooms will show owner-approved images, descriptions, prices when provided,
   and amenities. **Enquire Now** must navigate to `/contact`.
@@ -23,8 +24,10 @@ or couple it to the owner's Manglam Furniture project.
   hours, or actual hotel images. Use clear text placeholders until verified
   content is supplied. Do not use stock photos as actual property photos.
 - Admin scope includes rooms/photos, descriptions, prices, restaurant
-  categories/menu items/photos and contact details. Website settings editing is
-  deferred until requested.
+  categories/menu items/photos and public hotel details. Settings updates use
+  the existing session, exact origin and CSRF protections, strict field
+  validation, and revision-based conflict detection. Never reset settings or
+  overwrite newer edits from stale forms.
 - `/admin/login`, `/admin` and `/admin/rooms` use server-side authentication.
   Room mutations require the existing active session, exact allowed origin,
   same-site request policy and a session-bound CSRF token. Room detail

@@ -7,6 +7,7 @@ import { createApp } from '../../server/src/app.js';
 import Room from '../../server/src/models/Room.js';
 import MenuCategory from '../../server/src/models/MenuCategory.js';
 import MenuItem from '../../server/src/models/MenuItem.js';
+import SiteSettings from '../../server/src/models/SiteSettings.js';
 import { createOpaqueToken, hashSessionToken } from '../../server/src/security/adminAuth.js';
 
 export const fixtureOrigin = 'http://127.0.0.1:5173';
@@ -102,6 +103,15 @@ export async function startRoomFixture({ imageStorage } = {}) {
   const rooms = new Map();
   const categories = new Map();
   const items = new Map();
+  const settings = {
+    singletonKey: 'primary',
+    hotelName: 'Manglam Hotel & Restaurant',
+    phoneNumbers: ['+91 7568647755', '+91 9828809155'],
+    instagramUrl: 'https://www.instagram.com/thehouseofmanglam/',
+    address: 'XHMX+X8, Jaipur Phalodi Express Way, Kalwar Rd, Radha Krishna Enclave Scheme, Kalwad, Rajasthan 303706',
+    googleMapsUrl: 'https://www.google.com/maps/place/MANGLAM+HOTEL+%26+RESTAURANT/',
+    revision: 0,
+  };
   // Exercise the installed Mongoose query implementation, including pipeline
   // opt-in, filter casting and timestamps. Only its collection boundary is fake;
   // this isolated instance never opens a connection or loads credentials.
@@ -291,12 +301,29 @@ export async function startRoomFixture({ imageStorage } = {}) {
     },
     MenuCategory: menuModel(MenuCategory, categories),
     MenuItem: menuModel(MenuItem, items),
-    SiteSettings: { findOne: () => query(() => null) },
+    SiteSettings: {
+      findOne: (filter) => query(() => {
+        check();
+        return matches(settings, filter) ? settings : null;
+      }),
+      findOneAndUpdate: (filter, update, options) => query(async () => {
+        check();
+        if (!options.runValidators || options.returnDocument !== 'after') {
+          throw new Error('Settings updates must validate and return the updated document.');
+        }
+        if (!matches(settings, filter)) return null;
+        const next = { ...settings, ...structuredClone(update.$set), updatedAt: new Date() };
+        await new SiteSettings(next).validate();
+        if (!matches(settings, filter)) return null;
+        Object.assign(settings, next);
+        return settings;
+      }),
+    },
   };
   const server = createApp({ models, isDatabaseReady: () => state.ready, imageStorage: testImageStorage, adminConfig: { allowedOrigins: [fixtureOrigin], production: false } }).listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   return {
-    rooms, categories, items, models, state, admin, session, token, csrf, imageStorage: testImageStorage, storageState, reservationWrites,
+    rooms, categories, items, settings, models, state, admin, session, token, csrf, imageStorage: testImageStorage, storageState, reservationWrites,
     url: `http://127.0.0.1:${server.address().port}`,
     close: () => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   };

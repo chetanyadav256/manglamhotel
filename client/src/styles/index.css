@@ -76,14 +76,23 @@
     color: var(--color-forest);
   }
   .brand-name {
+    display: block;
+    max-width: min(320px, calc(100vw - 185px));
+    overflow: hidden;
     font: 28px/1.15 var(--font-display);
     letter-spacing: .09em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .brand-dot { color: #987443; }
   .brand-caption {
+    max-width: min(320px, calc(100vw - 185px));
+    overflow: hidden;
     margin-top: 5px;
     font-size: 9px;
     letter-spacing: .23em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .brand-light { color: var(--color-paper); }
   .brand-light .brand-dot { color: var(--color-gold); }

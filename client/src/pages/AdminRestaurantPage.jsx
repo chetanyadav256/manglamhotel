@@ -53,7 +53,6 @@ export default function AdminRestaurantPage({ kind = 'categories' }) {
   }
   const result = list.result;
   return <>
-    <title>Restaurant Management | Manglam Hotel &amp; Restaurant</title>
     <p className="eyebrow">Administration</p><h1>Restaurant Management</h1>
     <p className="admin-dashboard-lede">Manage verified menu details. Publication and dish availability are separate controls.</p>
     <RestaurantNav />

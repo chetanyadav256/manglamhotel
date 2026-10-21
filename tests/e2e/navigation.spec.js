@@ -16,7 +16,7 @@ for (const width of [360, 393, 768, 1024, 1440]) {
       await page.goto('/');
       await expect(page.getByRole('heading', { level: 1 })).toContainText('Welcome to');
       await expectNoOverflow(page);
-      const location = page.getByRole('link', { name: /Manglam Hotel location/ });
+      const location = page.getByRole('link', { name: /location \(opens Google Maps/ });
       await expect(location).toBeVisible();
       await expect(location).toHaveAttribute('href', contact.maps);
       await expect(location).toHaveAttribute('target', '_blank');

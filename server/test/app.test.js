@@ -152,6 +152,7 @@ test('environment configuration validates port and runtime mode', () => {
     mongodbUri: '',
     allowedOrigins: ['http://127.0.0.1:5173', 'http://localhost:5173'],
     trustProxyHops: 0,
+    publicSiteUrl: '',
   });
   for (const port of ['0', '65536', 'invalid', '1.5', '']) {
     assert.throws(() => readEnv({ PORT: port }), /PORT/);
@@ -166,23 +167,42 @@ test('environment configuration validates port and runtime mode', () => {
   assert.throws(() => readEnv({
     NODE_ENV: 'production',
     MONGODB_URI: 'mongodb+srv://cluster.example.mongodb.net/manglam_hotel',
+    PUBLIC_SITE_URL: 'https://manglam.example',
   }), /ADMIN_ALLOWED_ORIGINS/);
-  assert.equal(
-    readEnv({
+  const productionEnvironment = {
       NODE_ENV: 'production',
       MONGODB_URI: 'mongodb+srv://cluster.example.mongodb.net/manglam_hotel',
+      PUBLIC_SITE_URL: 'https://manglam.example',
       ADMIN_ALLOWED_ORIGINS: 'https://manglam.example',
-    }).mongodbUri,
-    'mongodb+srv://cluster.example.mongodb.net/manglam_hotel',
-  );
+      IMAGEKIT_PRIVATE_KEY: 'test-only-imagekit-key',
+    };
+  assert.equal(readEnv(productionEnvironment).mongodbUri, productionEnvironment.MONGODB_URI);
+  assert.equal(readEnv(productionEnvironment).host, '0.0.0.0');
+  assert.equal(readEnv(productionEnvironment).publicSiteUrl, productionEnvironment.PUBLIC_SITE_URL);
   assert.deepEqual(
     readEnv({
-      NODE_ENV: 'production',
-      MONGODB_URI: 'mongodb+srv://cluster.example.mongodb.net/manglam_hotel',
+      ...productionEnvironment,
       ADMIN_ALLOWED_ORIGINS: 'https://manglam.example,https://admin.manglam.example',
     }).allowedOrigins,
     ['https://manglam.example', 'https://admin.manglam.example'],
   );
+  assert.throws(() => readEnv({
+    ...productionEnvironment,
+    PUBLIC_SITE_URL: 'https://other.example',
+  }), /also appear in ADMIN_ALLOWED_ORIGINS/);
+  assert.throws(() => readEnv({
+    NODE_ENV: 'production',
+    MONGODB_URI: 'mongodb+srv://cluster.example.mongodb.net/manglam_hotel',
+    PUBLIC_SITE_URL: 'https://manglam.example',
+    ADMIN_ALLOWED_ORIGINS: 'https://manglam.example',
+  }), /IMAGEKIT_PRIVATE_KEY/);
+  assert.throws(() => readEnv({
+    NODE_ENV: 'production',
+    MONGODB_URI: 'mongodb+srv://cluster.example.mongodb.net/manglam_hotel',
+    PUBLIC_SITE_URL: 'http://manglam.example',
+    ADMIN_ALLOWED_ORIGINS: 'http://manglam.example',
+    IMAGEKIT_PRIVATE_KEY: 'test-only-imagekit-key',
+  }), /HTTPS origin/);
 });
 
 test('MongoDB diagnostics are actionable without exposing connection details', () => {

@@ -1,10 +1,7 @@
-import { useCallback } from 'react';
 import { Camera, MapPin, Phone } from 'lucide-react';
 import PageIntro from '../components/ui/PageIntro.jsx';
 import ExternalLink from '../components/ui/ExternalLink.jsx';
-import { contact } from '../config/contact.js';
-import useApiData from '../hooks/useApiData.js';
-import { getSiteSettings } from '../services/api.js';
+import { useSiteSettings } from '../app/SiteSettingsContext.js';
 
 function ContactSection({ id, number, icon: Icon, title, description, children }) {
   return (
@@ -19,29 +16,7 @@ function ContactSection({ id, number, icon: Icon, title, description, children }
 }
 
 export default function ContactPage() {
-  const loadSettings = useCallback(({ signal }) => getSiteSettings({ signal }), []);
-  const { data: settings } = useApiData(loadSettings);
-  const contactDetails = settings
-    && Array.isArray(settings.phoneNumbers)
-    && settings.phoneNumbers.every((phone) => typeof phone === 'string')
-    && typeof settings.instagramUrl === 'string'
-    && typeof settings.address === 'string'
-    && typeof settings.googleMapsUrl === 'string'
-    ? {
-      phones: settings.phoneNumbers.map((label) => ({
-        label,
-        href: `tel:${label.replace(/[^\d+]/g, '')}`,
-      })),
-      instagram: settings.instagramUrl,
-      address: settings.address,
-      maps: settings.googleMapsUrl,
-    }
-    : {
-      phones: contact.phones,
-      instagram: contact.instagram,
-      address: contact.address.join(' '),
-      maps: contact.maps,
-    };
+  const contactDetails = useSiteSettings();
 
   return (
     <>
@@ -58,11 +33,11 @@ export default function ContactPage() {
           </div>
         </ContactSection>
         <ContactSection id="instagram" number="02" icon={Camera} title="Instagram" description="Find Manglam on Instagram.">
-          <p className="mb-5 font-display text-2xl text-forest">@thehouseofmanglam</p>
+          <p className="mb-5 font-display text-2xl text-forest">Manglam on Instagram</p>
           <ExternalLink href={contactDetails.instagram} className="button button-outline"><Camera size={18} aria-hidden="true" />Visit Instagram</ExternalLink>
         </ContactSection>
-        <ContactSection id="location" number="03" icon={MapPin} title="Hotel location" description="Find us in Kalwad, Rajasthan. Open the map for directions to the hotel.">
-          <address className="mb-6 leading-8 text-muted not-italic">{contactDetails.address}</address>
+        <ContactSection id="location" number="03" icon={MapPin} title="Hotel location" description="Find the hotel at the address below. Open the map for directions.">
+          <address className="mb-6 whitespace-pre-line leading-8 text-muted not-italic">{contactDetails.address}</address>
           <ExternalLink href={contactDetails.maps}><MapPin size={18} aria-hidden="true" />Open Google Maps</ExternalLink>
         </ContactSection>
       </div>

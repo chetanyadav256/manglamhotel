@@ -32,6 +32,24 @@ export function readEnv(environment = process.env) {
     throw new Error('MONGODB_URI is required in production.');
   }
 
+  const publicSiteUrl = environment.PUBLIC_SITE_URL?.trim() || '';
+  if (nodeEnv === 'production' && !publicSiteUrl) {
+    throw new Error('PUBLIC_SITE_URL is required in production.');
+  }
+  if (publicSiteUrl) {
+    let parsedSiteUrl;
+    try {
+      parsedSiteUrl = new URL(publicSiteUrl);
+    } catch {
+      throw new Error('PUBLIC_SITE_URL must be a valid HTTPS site origin.');
+    }
+    if (parsedSiteUrl.origin !== publicSiteUrl || parsedSiteUrl.protocol !== 'https:'
+      || parsedSiteUrl.username || parsedSiteUrl.password || parsedSiteUrl.pathname !== '/'
+      || parsedSiteUrl.search || parsedSiteUrl.hash) {
+      throw new Error('PUBLIC_SITE_URL must be an HTTPS origin with no path, query or fragment.');
+    }
+  }
+
   const configuredOrigins = environment.ADMIN_ALLOWED_ORIGINS
     ?.split(',')
     .map((origin) => origin.trim())
@@ -60,13 +78,20 @@ export function readEnv(environment = process.env) {
   if (new Set(allowedOrigins).size !== allowedOrigins.length) {
     throw new Error('ADMIN_ALLOWED_ORIGINS must not contain duplicates.');
   }
+  if (publicSiteUrl && !allowedOrigins.includes(publicSiteUrl)) {
+    throw new Error('PUBLIC_SITE_URL must also appear in ADMIN_ALLOWED_ORIGINS.');
+  }
+  if (nodeEnv === 'production' && !environment.IMAGEKIT_PRIVATE_KEY?.trim()) {
+    throw new Error('IMAGEKIT_PRIVATE_KEY is required in production.');
+  }
 
   return {
     port,
-    host: environment.HOST || '127.0.0.1',
+    host: nodeEnv === 'production' ? '0.0.0.0' : environment.HOST || '127.0.0.1',
     nodeEnv,
     mongodbUri,
     allowedOrigins,
     trustProxyHops,
+    publicSiteUrl,
   };
 }
