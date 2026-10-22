@@ -6,8 +6,11 @@ pages are implemented. Rooms and menu content come from published database
 records and remain empty until verified hotel content is added. `/admin` is
 protected by database-backed sessions. `/admin/rooms` supports room creation,
 editing, publication, soft archive and restoration. `/admin/restaurant` supports
-category and dish management, prices, availability, publication and soft archive.
-Saved dishes support protected ImageKit photo management. Admins can update
+category and dish management, prices, availability, automatic publication on
+creation and confirmed permanent deletion. Existing archives remain accessible.
+Saved dishes support protected ImageKit photo management. See
+[Restaurant deletion and recovery](docs/restaurant-deletion.md) for transactional
+dependency checks, durable cleanup jobs and deployment considerations. Admins can update
 public hotel details through protected website settings management.
 
 ## Requirements and quick start

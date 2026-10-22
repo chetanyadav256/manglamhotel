@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import { createAdminProtection } from '../security/adminAuth.js';
 import { imageKitStorage } from '../services/imageKitStorage.js';
 import { supportedTypes, acquireUploadSlot, releaseUploadSlot, createUploadMiddleware, multipartError } from '../services/imageUploads.js';
-import { ownsMenuImage, menuImageFolder, menuCleanupRecord, processMenuImageCleanup } from '../services/menuImageCleanup.js';
+import { ownsMenuImage, menuImageFolder, menuCleanupRecord, processMenuImageCleanup, queueMenuCleanupJob } from '../services/menuImageCleanup.js';
 import { HttpError } from '../utils/http.js';
 import { logDiagnosticError } from '../utils/diagnostics.js';
 
@@ -85,7 +85,11 @@ export function createAdminMenuImagesRouter({ models, isDatabaseReady, imageStor
           if (completed(current, values.operationId)) return current;
         }
         if ((current.imageVersion ?? 0) > values.version) recovery.uncertain = false;
-      } catch { /* Cannot prove the write failed: keep all remote assets. */ }
+      } catch (error) {
+        // A permanently deleted ID cannot be recreated by these APIs.
+        if (error.status === 404) recovery.uncertain = false;
+        // Otherwise cannot prove the write failed: keep all remote assets.
+      }
       if (recovery.uncertain) throw new HttpError(503, 'Photo persistence could not be confirmed. Reload the photo before retrying; assets were retained for recovery.');
       throw cause;
     }
@@ -144,16 +148,19 @@ export function createAdminMenuImagesRouter({ models, isDatabaseReady, imageStor
       const cleanupPending = await clean(item._id, request.requestId);
       reply = { status: request.method === 'POST' ? 201 : 200, data: output(updated, { cleanupPending, legacyAssetRetained: Boolean(item.image && !oldCleanup) }) };
     } catch (error) {
+      let failure = error;
       if (asset && !recovery.uncertain) {
         try {
           // Persist the compensation before deletion so a failed delete is retryable.
-          await Model.updateOne({ _id: request.params.id }, { $push: { pendingImageCleanup: menuCleanupRecord(asset) } });
+          const queued = await Model.updateOne({ _id: request.params.id }, { $push: { pendingImageCleanup: menuCleanupRecord(asset) } });
+          if (!queued.matchedCount) await queueMenuCleanupJob({ models, itemId: request.params.id, asset });
           await clean(request.params.id, request.requestId);
         } catch (cleanupError) {
           logDiagnosticError(cleanupError, { category: 'mongodb', operation: 'mongodb.menu-image-compensation', requestId: request.requestId });
+          failure = new HttpError(503, 'Photo cleanup could not be saved. The uploaded asset was retained for recovery; reload before retrying.');
         }
       }
-      requestError = error;
+      requestError = failure;
     } finally {
       request.off('aborted', abort); response.off('close', abort);
       try { if (directory) await rm(directory, { recursive: true, force: true }); }

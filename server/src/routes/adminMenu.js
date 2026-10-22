@@ -4,6 +4,10 @@ import { createAdminProtection } from '../security/adminAuth.js';
 import { HttpError, parsePagination, sendPaginated } from '../utils/http.js';
 
 import { MAX_MENU_CATEGORIES, menuCategoryIds, normalizeMenuTags } from '../../../shared/menu.js';
+import { imageKitStorage } from '../services/imageKitStorage.js';
+import { menuTransaction, lockMenuCategories } from '../services/menuTransactions.js';
+import { queueMenuCleanupJob, processMenuImageCleanup } from '../services/menuImageCleanup.js';
+import { logDiagnosticError } from '../utils/diagnostics.js';
 import { menuCategoryFilter, menuSearchFilter } from '../utils/menu.js';
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -37,7 +41,7 @@ export function validateMenuBody(body, kind, creating = false) {
   for (const field of ['isPublished', ...(item ? ['isAvailable'] : [])]) {
     if (!Object.hasOwn(body, field)) continue;
     if (typeof body[field] !== 'boolean') throw new HttpError(400, `${field} must be true or false.`);
-    if (creating && field === 'isPublished' && body[field]) throw new HttpError(400, 'New records must be drafts. Publish separately after review.');
+    if (creating && field === 'isPublished' && !body[field]) throw new HttpError(400, 'New records are published when added. Use Unpublish afterward to hide a record.');
     values[field] = body[field];
   }
   if (item) {
@@ -88,15 +92,6 @@ export function createAdminMenuRouter(options) {
   const router = Router();
   router.use(...createAdminProtection(options));
 
-  async function requireCategory(id) {
-    const category = await MenuCategory.findOne({ _id: id }).lean();
-    if (!category) throw new HttpError(400, 'Selected category no longer exists. Choose another category.');
-    if (category.isArchived) throw new HttpError(409, 'Selected category is archived. Restore it or choose an active category.');
-  }
-  async function requireCategories(ids) {
-    if (!ids.length) throw new HttpError(400, 'Select at least one active category.');
-    await Promise.all(ids.map(requireCategory));
-  }
   async function categoryName(values, id) {
     if (values.name === undefined) return;
     values.nameKey = values.name.toLowerCase();
@@ -112,7 +107,7 @@ export function createAdminMenuRouter(options) {
       .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 100).replace(/-$/g, '') || 'category';
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const slug = attempt === 0 ? base : `${base}-${randomBytes(6).toString('hex')}`;
-      try { return await MenuCategory.create({ ...values, slug, isPublished: false, isArchived: false }); }
+      try { return await MenuCategory.create({ ...values, slug, isPublished: true, isArchived: false }); }
       catch (error) {
         if (error.code !== 11000) throw error;
         if (error.keyPattern?.slug || error.keyValue?.slug) continue;
@@ -128,20 +123,20 @@ export function createAdminMenuRouter(options) {
     const label = item ? 'Menu item' : 'Category';
     const routes = Router();
     routes.param('id', (_request, _response, next, id) => next(validId(id) ? undefined : new HttpError(400, `${label} ID is invalid.`)));
-    const get = async (id) => {
-      const record = await Model.findOne({ _id: id }).lean();
+    const get = async (id, session = null) => {
+      const record = await Model.findOne({ _id: id }).session(session).lean();
       if (!record) throw new HttpError(404, `${label} not found.`);
       return record;
     };
-    const update = async (id, filter, change) => {
+    const update = async (id, filter, change, session = null) => {
       try {
-        const record = await Model.findOneAndUpdate({ _id: id, ...filter }, change, { returnDocument: 'after', runValidators: true }).lean();
+        const record = await Model.findOneAndUpdate({ _id: id, ...filter }, change, { returnDocument: 'after', runValidators: true, session }).lean();
         if (record) return record;
       } catch (error) {
         if (error.code === 11000) throw new HttpError(409, 'A category with this name already exists.');
         throw error;
       }
-      await get(id);
+      await get(id, session);
       throw new HttpError(409, 'Record status changed. Restore archived records before editing or publishing; only archived records can be restored.');
     };
     routes.get('/', async (request, response) => {
@@ -173,29 +168,69 @@ export function createAdminMenuRouter(options) {
     routes.get('/:id', async (request, response) => response.json({ data: serialize(await get(request.params.id), item) }));
     routes.post('/', async (request, response) => {
       const values = validateMenuBody(request.body, kind, true);
-      if (item) await requireCategories(values.categories); else await categoryName(values);
-      const record = item
-        ? await Model.create({ ...toUpdate(values).$set, isPublished: false, isArchived: false })
-        : await createCategory(values);
+      let record;
+      if (item) {
+        record = await menuTransaction(options.models, async (session) => {
+          await lockMenuCategories(options.models, values.categories, session);
+          const [created] = await Model.create([{ ...toUpdate(values).$set, isPublished: true, isArchived: false }], { session });
+          return created;
+        });
+      } else {
+        await categoryName(values);
+        record = await createCategory(values);
+      }
       response.status(201).json({ data: serialize(record, item) });
     });
     routes.patch('/:id', async (request, response) => {
       const values = validateMenuBody(request.body, kind);
-      const current = await get(request.params.id);
-      if (item && Object.hasOwn(request.body, 'category') && menuCategoryIds(current).length > 1) throw new HttpError(409, 'Reload the editor to manage all assigned categories.');
-      if (item && (values.categories !== undefined || values.isPublished === true)) await requireCategories(values.categories ?? menuCategoryIds(current));
-      if (!item) await categoryName(values, request.params.id);
-      response.json({ data: serialize(await update(request.params.id, { isArchived: { $ne: true } }, toUpdate(values)), item) });
+      const save = async (session = null) => {
+        const current = await get(request.params.id, session);
+        if (item && Object.hasOwn(request.body, 'category') && menuCategoryIds(current).length > 1) throw new HttpError(409, 'Reload the editor to manage all assigned categories.');
+        if (item && (values.categories !== undefined || values.isPublished === true)) await lockMenuCategories(options.models, values.categories ?? menuCategoryIds(current), session);
+        if (!item) await categoryName(values, request.params.id);
+        return update(request.params.id, { isArchived: { $ne: true } }, toUpdate(values), session);
+      };
+      const record = item ? await menuTransaction(options.models, save) : await save();
+      response.json({ data: serialize(record, item) });
     });
     routes.delete('/:id', async (request, response) => {
-      assertBody(request.body, []);
-      response.json({ data: serialize(await update(request.params.id, {}, { $set: { isArchived: true, isPublished: false } }), item) });
+      // Old clients used DELETE {} to archive: never interpret that as consent
+      // to permanent deletion after this behavior change.
+      assertBody(request.body, ['confirmPermanentDelete']);
+      if (request.body.confirmPermanentDelete !== true || Object.keys(request.query).length) throw new HttpError(400, 'Explicit permanent deletion confirmation is required. Reload management and confirm Delete.');
+      const result = await menuTransaction(options.models, async (session) => {
+        const current = await Model.findOne({ _id: request.params.id }).select('+pendingImageCleanup').session(session).lean();
+        if (!current) return { deleted: true, alreadyDeleted: true };
+        if (item) {
+          const assets = [...(current.pendingImageCleanup || []), ...(current.image ? [current.image] : [])];
+          for (const asset of assets) await queueMenuCleanupJob({ models: options.models, itemId: current._id, asset, session });
+        } else {
+          // The write lock serializes this check with every new assignment,
+          // including legacy category writes. Count archived and stale references too.
+          await Model.updateOne({ _id: current._id }, { $inc: { referenceRevision: 1 } }, { session, timestamps: false });
+          const count = await MenuItem.countDocuments({ $or: [{ category: current._id }, { categories: current._id }] }).session(session);
+          if (count) throw new HttpError(409, `Cannot delete this category: ${count} menu item${count === 1 ? '' : 's'} still reference it, including archived records. Reassign or delete those dishes first.`);
+        }
+        await Model.deleteOne({ _id: current._id }, { session });
+        return { deleted: true, alreadyDeleted: false };
+      });
+      let cleanupPending = false;
+      if (item) {
+        try { cleanupPending = await processMenuImageCleanup({ models: options.models, imageStorage: options.imageStorage || imageKitStorage, itemId: request.params.id }); }
+        catch (error) { cleanupPending = true; logDiagnosticError(error, { operation: 'menu-delete.cleanup', requestId: request.requestId }); }
+      }
+      response.status(cleanupPending ? 202 : 200).json({ data: { ...result, cleanupPending,
+        message: cleanupPending ? 'Menu item deleted. Photo cleanup is pending; managed assets will retry automatically. Unverified legacy assets require operator review.' : `${label} permanently deleted.`,
+      } });
     });
     routes.post('/:id/restore', async (request, response) => {
       assertBody(request.body, []);
-      const current = await get(request.params.id);
-      if (item) await requireCategories(menuCategoryIds(current));
-      response.json({ data: serialize(await update(request.params.id, { isArchived: true }, { $set: { isArchived: false, isPublished: false } }), item) });
+      const restore = async (session = null) => {
+        const current = await get(request.params.id, session);
+        if (item) await lockMenuCategories(options.models, menuCategoryIds(current), session);
+        return update(request.params.id, { isArchived: true }, { $set: { isArchived: false, isPublished: false } }, session);
+      };
+      response.json({ data: serialize(item ? await menuTransaction(options.models, restore) : await restore(), item) });
     });
     router.use(`/${kind}`, routes);
   }

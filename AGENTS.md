@@ -57,9 +57,20 @@ or couple it to the owner's Manglam Furniture project.
   endpoint, one JPEG/PNG/WebP photo up to 5 MB per item, signature and decoder
   validation, version-checked mutations, and durable ImageKit cleanup records.
   Do not accept arbitrary asset IDs or URL editing.
-- Categories and dishes start as drafts; archive unpublishes and restore leaves
-  drafts. Never cascade-delete or permanently delete menu records. A category's
-  archive/publication gates its dishes publicly without rewriting those dishes.
+- New restaurant categories and dishes are published by their create endpoints.
+  Existing unpublished/archived records remain unchanged; explicit visibility
+  controls and restoration of legacy archives remain available.
+- Restaurant DELETE permanently removes a record only with the explicit JSON
+  confirmPermanentDelete flag. Never treat an old DELETE {} archive request as
+  consent. Room deletion remains a soft archive.
+- Category deletion and dish assignments share transactional referenceRevision
+  writes; refuse deletion while either category or categories[] references exist,
+  including legacy/archived dishes. Never cascade-delete or detach memberships.
+- Dish deletion transfers current/pending photo metadata to MenuImageCleanupJob
+  records in the same transaction. Keep cleanup jobs durable, verify ownership
+  and live references before remote deletion, and preserve uncertain assets for
+  recovery. In-flight upload compensation must survive a missing dish. See
+  docs/restaurant-deletion.md before changing deletion or cleanup protocols.
 - Category slugs are generated uniquely and remain stable on rename. Canonical
   nameKey values have a partial unique index; legacy names are checked on writes.
   Do not backfill or migrate existing production records without authorization.

@@ -66,7 +66,7 @@ export function createApp(options = {}) {
   }));
   application.use('/api/admin/rooms', createAdminRoomsRouter({ models, isDatabaseReady, ...adminConfig }));
   application.use('/api/admin/menu/items', createAdminMenuImagesRouter({ models, isDatabaseReady, ...(imageStorage ? { imageStorage } : {}), ...adminConfig }));
-  application.use('/api/admin/menu', createAdminMenuRouter({ models, isDatabaseReady, ...adminConfig }));
+  application.use('/api/admin/menu', createAdminMenuRouter({ models, isDatabaseReady, ...(imageStorage ? { imageStorage } : {}), ...adminConfig }));
   application.use('/api/admin/site-settings', createAdminSiteSettingsRouter({ models, isDatabaseReady, ...adminConfig }));
   application.use('/api', createPublicContentRouter({ models, isDatabaseReady }));
   application.use('/api', notFoundHandler);

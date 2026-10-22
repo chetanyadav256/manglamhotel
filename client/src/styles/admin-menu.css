@@ -19,9 +19,22 @@
 .admin-menu-record-summary > div { min-width: 0; }
 @media (min-width: 768px) { .admin-menu-record-summary { grid-template-columns: 140px minmax(0, 1fr); } }
 
-.menu-category-editor { margin-block: 1.5rem; max-height: 24rem; overflow-y: auto; }
-.menu-category-editor legend { font-weight: 600; }
-.menu-category-editor .admin-menu-checkbox { min-height: 44px; overflow-wrap: anywhere; }
+/* More specific than .admin-room-form input/label, regardless of chunk order. */
+.admin-menu-form .menu-category-editor { margin-block: 1.5rem; padding: 0; border: 0; min-width: 0; }
+.admin-menu-form .menu-category-editor legend { font-weight: 600; }
+.menu-category-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 10px; margin-top: 14px; max-height: 24rem; overflow-y: auto; padding: 3px; }
+.admin-menu-form .menu-category-editor .menu-category-option { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 12px; margin: 0; padding: 12px; min-height: 64px; border: 1px solid var(--color-line); border-radius: 6px; background: var(--color-paper); cursor: pointer; }
+.admin-menu-form .menu-category-editor .menu-category-option input[type=checkbox] { appearance: auto; position: static; width: 20px; height: 20px; min-width: 20px; max-width: 20px; min-height: 20px; max-height: 20px; margin: 0; padding: 0; border-radius: 3px; accent-color: var(--color-forest); }
+.menu-category-option > span { min-width: 0; white-space: normal; word-break: normal; overflow-wrap: break-word; line-height: 1.5; }
+.menu-category-option small { display: block; font-size: 11px; color: var(--color-muted); margin-top: 3px; }
+.admin-menu-form .menu-category-editor .menu-category-option:hover { border-color: #829a87; }
+.admin-menu-form .menu-category-editor .menu-category-option.is-selected { background: #edf3e8; border-color: #829a87; }
+.admin-menu-form .menu-category-editor .menu-category-option.is-disabled { background: var(--color-sand); cursor: not-allowed; color: var(--color-muted); }
+.menu-category-option:focus-within { outline: 2px solid var(--color-gold, #a47e3b); outline-offset: 2px; }
+.menu-category-selected { overflow-wrap: break-word; }
+.admin-menu-delete { color: #8b2f29; border-color: #b8756d; }
+.admin-menu-delete:hover { background: #fbefed; }
+.admin-menu-cleanup-warning { margin-top: 16px; padding: 16px; border: 1px solid #b28b44; background: #fff7e4; color: #624510; line-height: 1.7; }
 .menu-tags-editor { margin-block: 1.5rem; }
 .menu-tags-editor input { min-width: 0; flex: 1 1 12rem; }
 .menu-tag-list { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .75rem; }

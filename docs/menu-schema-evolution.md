@@ -1,5 +1,9 @@
 # Restaurant categories, tags and search
 
+For the subsequent automatic-publication and permanent-deletion contract, see
+[Restaurant deletion and recovery](restaurant-deletion.md). Category/tag
+compatibility described here still applies.
+
 This change is local only. No Atlas data, credentials, ImageKit assets, commits,
 pushes or deployments are part of this work. Use isolated fixtures to validate it.
 

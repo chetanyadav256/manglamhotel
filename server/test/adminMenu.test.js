@@ -23,8 +23,18 @@ async function create(kind, values) {
   assert.equal(response.status, 201, await response.clone().text());
   return (await response.json()).data;
 }
-const category = (values = {}) => create('categories', { name: 'Fixture category', ...values });
-const item = (categoryId, values = {}) => create('items', { name: 'Fixture dish', category: categoryId, ...values });
+// Keep legacy visibility fixtures explicitly unpublished after API creation.
+async function unpublished(kind, values) {
+  const body = { ...values }; delete body.isPublished;
+  const record = await create(kind, body);
+  await request(`${kind}/${record.id}`, 'PATCH', { isPublished: false });
+  return { ...record, isPublished: false };
+}
+const category = (values = {}) => unpublished('categories', { name: 'Fixture category', ...values });
+const item = (categoryId, values = {}) => unpublished('items', { name: 'Fixture dish', category: categoryId, ...values });
+// Prior archived records are fixtures, not newly archived through DELETE.
+function legacyArchive(kind, id) { Object.assign(fixture[kind].get(id), { isArchived: true, isPublished: false }); }
+
 const data = async (path) => (await (await request(path)).json()).data;
 const publicData = async (kind) => (await (await fetch(`${fixture.url}/api/menu/${kind}`)).json()).data;
 
@@ -54,7 +64,7 @@ test('category creation normalizes names, generates safe unique slugs and reject
   assert.equal((await category({ name: 'भोजन' })).slug, 'category');
   delete fixture.categories.get(first.id).nameKey;
   assert.equal((await request('categories', 'POST', { name: 'fixture & category' })).status, 409);
-  await request(`categories/${first.id}`, 'DELETE', {});
+  legacyArchive('categories', first.id);
   assert.equal((await request('categories', 'POST', { name: first.name })).status, 409);
   assert.equal(fixture.categories.size, 3);
   const concurrent = await Promise.all([request('categories', 'POST', { name: 'Concurrent name' }), request('categories', 'POST', { name: ' concurrent NAME ' })]);
@@ -62,7 +72,7 @@ test('category creation normalizes names, generates safe unique slugs and reject
 });
 
 test('category validation rejects mass assignment and edits preserve slugs', async () => {
-  for (const body of [null, [], {}, { name: '' }, { name: 'x'.repeat(101) }, { name: 'Valid', description: 'x'.repeat(1001) }, { name: 'Valid', description: null }, { name: 'Valid', slug: 'injected' }, { name: 'Valid', nameKey: 'injected' }, { name: 'Valid', image: {} }, { name: 'Valid', isArchived: true }, { name: 'Valid', isPublished: true }, { name: 'Valid', displayOrder: 1.5 }, { name: 'Valid', displayOrder: -1 }]) assert.equal((await request('categories', 'POST', body)).status, 400);
+  for (const body of [null, [], {}, { name: '' }, { name: 'x'.repeat(101) }, { name: 'Valid', description: 'x'.repeat(1001) }, { name: 'Valid', description: null }, { name: 'Valid', slug: 'injected' }, { name: 'Valid', nameKey: 'injected' }, { name: 'Valid', image: {} }, { name: 'Valid', isArchived: true }, { name: 'Valid', isPublished: false }, { name: 'Valid', displayOrder: 1.5 }, { name: 'Valid', displayOrder: -1 }]) assert.equal((await request('categories', 'POST', body)).status, 400);
   const first = await category();
   const other = await category({ name: 'Other category' });
   assert.equal((await request(`categories/${first.id}`, 'PATCH', { name: ' Renamed category ', description: '', displayOrder: 3 })).status, 200);
@@ -74,14 +84,14 @@ test('category validation rejects mass assignment and edits preserve slugs', asy
 
 test('menu items validate names, category references, prices and strict field allowlists', async () => {
   const parent = await category();
-  for (const values of [{ name: '' }, { name: 'x'.repeat(151) }, { category: 'bad' }, { category: missing }, { category: null }, { price: -1 }, { price: '99' }, { price: true }, { price: 2.001 }, { price: 10000001 }, { vegetarian: 'true' }, { isAvailable: 1 }, { isPublished: true }, { isPublished: 'true' }, { image: {} }, { _id: missing }, { isArchived: true }, { $set: { price: 1 } }, { createdAt: 'date' }]) {
+  for (const values of [{ name: '' }, { name: 'x'.repeat(151) }, { category: 'bad' }, { category: missing }, { category: null }, { price: -1 }, { price: '99' }, { price: true }, { price: 2.001 }, { price: 10000001 }, { vegetarian: 'true' }, { isAvailable: 1 }, { isPublished: false }, { isPublished: 'true' }, { image: {} }, { _id: missing }, { isArchived: true }, { $set: { price: 1 } }, { createdAt: 'date' }]) {
     const response = await request('items', 'POST', { name: 'Fixture dish', category: parent.id, ...values });
     assert.equal(response.status, 400, JSON.stringify(values));
   }
   for (const price of [NaN, Infinity]) assert.throws(() => validateMenuBody({ name: 'Test', category: parent.id, price }, 'items', true), /Price/);
   assert.equal((await request('items', 'POST', { name: 'Missing category' })).status, 400);
   assert.equal(fixture.items.size, 0);
-  await request(`categories/${parent.id}`, 'DELETE', {});
+  legacyArchive('categories', parent.id);
   assert.equal((await request('items', 'POST', { name: 'Test', category: parent.id })).status, 409);
 });
 
@@ -123,7 +133,7 @@ test('public menu gates both item and parent publication/archive while preservin
   await request(`categories/${parent.id}`, 'PATCH', { isPublished: false });
   assert.deepEqual(await publicData('items'), []);
   await request(`categories/${parent.id}`, 'PATCH', { isPublished: true });
-  await request(`categories/${parent.id}`, 'DELETE', {});
+  legacyArchive('categories', parent.id);
   assert.deepEqual(await publicData('categories'), []); assert.deepEqual(await publicData('items'), []);
   assert.equal(fixture.items.get(dish.id).isPublished, true); assert.equal(fixture.items.size, 1);
   assert.equal((await request(`categories/${parent.id}`, 'PATCH', { isPublished: true })).status, 409);
@@ -139,16 +149,16 @@ test('public menu gates both item and parent publication/archive while preservin
   const response = await fetch(`${fixture.url}/api/menu/items`); assert.equal(response.headers.get('cache-control'), 'no-store');
 });
 
-test('item soft archive and restore enforce draft and category rules without deleting records', async () => {
+test('legacy item archive and restore enforce draft and category rules without deleting records', async () => {
   const parent = await category(); const dish = await item(parent.id);
   await request(`items/${dish.id}`, 'PATCH', { isPublished: true });
-  await request(`items/${dish.id}`, 'DELETE', {});
+  legacyArchive('items', dish.id);
   assert.equal(fixture.items.size, 1); assert.equal(fixture.items.get(dish.id).isPublished, false);
   for (const body of [{ isPublished: true }, { name: 'Changed' }, { isAvailable: false }]) assert.equal((await request(`items/${dish.id}`, 'PATCH', body)).status, 409);
   fixture.items.get(dish.id).isPublished = true;
   await request(`categories/${parent.id}`, 'PATCH', { isPublished: true });
   assert.deepEqual(await publicData('items'), []);
-  await request(`categories/${parent.id}`, 'DELETE', {});
+  legacyArchive('categories', parent.id);
   assert.equal((await request(`items/${dish.id}/restore`, 'POST', {})).status, 409);
   await request(`categories/${parent.id}/restore`, 'POST', {});
   const restored = (await (await request(`items/${dish.id}/restore`, 'POST', {})).json()).data;
@@ -169,7 +179,7 @@ test('lists paginate, search literally and filter archive/publication/category/a
   assert.equal((await data('items?availability=unavailable&publication=published'))[0].id, first.id);
   assert.equal((await data(`items?category=${other.id}`))[0].id, second.id);
   assert.equal((await data('items?publication=draft&availability=available'))[0].id, second.id);
-  await request(`items/${first.id}`, 'DELETE', {});
+  legacyArchive('items', first.id);
   assert.equal((await data('items?status=archived'))[0].id, first.id);
   assert.equal((await data('items?status=all')).length, 2);
   assert.equal((await data('categories?limit=1'))[0].id, parent.id);
@@ -179,9 +189,9 @@ test('lists paginate, search literally and filter archive/publication/category/a
 
 test('invalid/deleted IDs and database failures return safe errors', async () => {
   for (const kind of ['categories', 'items']) {
-    for (const [method, suffix, body] of [['GET', '', undefined], ['PATCH', '', { name: 'Edited' }], ['DELETE', '', {}], ['POST', '/restore', {}]]) {
+    for (const [method, suffix, body] of [['GET', '', undefined], ['PATCH', '', { name: 'Edited' }], ['DELETE', '', { confirmPermanentDelete: true }], ['POST', '/restore', {}]]) {
       assert.equal((await request(`${kind}/invalid${suffix}`, method, body)).status, 400);
-      assert.equal((await request(`${kind}/${missing}${suffix}`, method, body)).status, 404);
+      assert.equal((await request(`${kind}/${missing}${suffix}`, method, body)).status, method === 'DELETE' ? 200 : 404);
     }
     fixture.state.menuFailure = Object.assign(new Error('private database details'), { name: 'MongoNetworkError' });
     for (const [path, method, body] of [[kind, 'GET'], [kind, 'POST', { name: 'Test', ...(kind === 'items' ? { category: missing } : {}) }], [`${kind}/${missing}`, 'PATCH', { name: 'Edited' }]]) {
@@ -212,10 +222,11 @@ test('multiple categories deduplicate IDs, validate every assignment, and preser
   Object.assign(fixture.items.get(dish.id), { image, price: 123.45, vegetarian: false });
   const createdAt = fixture.items.get(dish.id).createdAt;
   assert.equal((await request(`items/${dish.id}`, 'PATCH', { categories: [b.id], tags: [] })).status, 200);
-  const stored = fixture.items.get(dish.id);
+  let stored = fixture.items.get(dish.id);
   assert.deepEqual(stored.image, image); assert.equal(stored.price, 123.45); assert.equal(stored.vegetarian, false);
   assert.deepEqual(stored.createdAt, createdAt); assert.deepEqual(stored.categories, [b.id]); assert.equal(stored.category, b.id);
   assert.equal((await data(`items?category=${a.id}`)).length, 0); assert.equal((await data(`items?category=${b.id}`)).length, 1);
+  stored = fixture.items.get(dish.id);
   delete stored.categories; // Actual legacy shape, read without backfill or timestamp changes.
   const snapshot = structuredClone(stored);
   assert.deepEqual((await data(`items/${dish.id}`)).categories, [b.id]);
@@ -235,7 +246,7 @@ test('category arrays and tags reject malformed data, empty tags, operators and 
   for (const vegetarian of [true, false, null]) assert.equal((await request('items', 'POST', { name: 'Invalid fixture', categories: [parent.id], vegetarian })).status, 400);
   assert.equal((await request('items', 'POST', { name: 'Ambiguous fixture', categories: [parent.id], category: parent.id })).status, 400);
   const dish = await create('items', { name: 'Valid fixture', categories: [parent.id] });
-  await request(`categories/${parent.id}`, 'DELETE', {});
+  legacyArchive('categories', parent.id);
   assert.equal((await request(`items/${dish.id}`, 'PATCH', { categories: [parent.id] })).status, 409);
   assert.equal((await request(`items/${dish.id}`, 'PATCH', { isPublished: true })).status, 409);
 });
@@ -259,10 +270,10 @@ test('public membership is per published category, with legacy fallback, dedupli
   await request(`categories/${a.id}`, 'PATCH', { isPublished: false });
   assert.deepEqual((await publicData('items'))[0].categoryIds, [b.id]);
   assert.equal((await publicData(`items?category=${a.id}`)).length, 0);
-  await request(`categories/${b.id}`, 'DELETE', {}); assert.deepEqual(await publicData('items'), []);
+  legacyArchive('categories', b.id); assert.deepEqual(await publicData('items'), []);
   await request(`categories/${a.id}`, 'PATCH', { isPublished: true });
   assert.equal((await publicData('items')).length, 1);
-  await request(`items/${first.id}`, 'DELETE', {}); assert.deepEqual(await publicData('items'), []);
+  legacyArchive('items', first.id); assert.deepEqual(await publicData('items'), []);
   assert.equal(fixture.items.size, 2);
 });
 

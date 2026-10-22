@@ -1,5 +1,9 @@
 # Restaurant administration
 
+New records now publish on creation; restaurant DELETE is permanent with explicit
+confirmation. See [Publication, permanent deletion and recovery](restaurant-deletion.md)
+for the current transaction, cleanup, CSS and deployment contract.
+
 Run `npm run dev` from the repository root, sign in at
 `http://127.0.0.1:5173/admin/login`, and select **Restaurant Management**.
 Categories live at `/admin/restaurant`; dishes at `/admin/restaurant/items`.
@@ -23,10 +27,14 @@ Add/edit routes are `/admin/restaurant/categories/new`,
   `null`/empty-string price clears it. Per-dish vegetarian writes are rejected.
   Prices remain Numbers in INR major units to preserve the public API contract;
   writes reject excess fractional precision and normalize to two decimals.
-- New records are always drafts. Dish availability defaults to true. Publication
-  is a separate deliberate confirmation, never a side effect of saving details.
-- Archived records cannot be edited/published. Archive atomically sets archived
-  true and published false; restore sets both false. No permanent deletion exists.
+- New records are published automatically by POST. Availability defaults to true.
+  Existing unpublished records stay hidden until explicitly published.
+- Normal lists offer Edit and Delete, plus visibility and dish availability controls.
+  DELETE requires `{ "confirmPermanentDelete": true }` and permanently removes the
+  record. Categories with any dish references return 409. Dish image cleanup is
+  transferred to a separate durable outbox atomically before deletion.
+- Old archives remain discoverable through Record status. Explicit restoration
+  leaves them unpublished. There is no new restaurant Archive action.
 - Category references are checked on dish creation, category assignment,
   publication and restoration. Archived/missing categories are rejected. Restore
   a dish's category first. An existing active dish can still be unpublished or
@@ -69,13 +77,13 @@ Each base below exposes the same six authenticated routes:
 | --- | --- |
 | GET base | Paginated list |
 | GET `/:id` | Detail, including archived records |
-| POST base | Create unpublished draft (201) |
+| POST base | Create published record (201) |
 | PATCH `/:id` | Allowlisted field changes on active records |
-| DELETE `/:id` | Soft archive and unpublish |
+| DELETE `/:id` | Confirmed permanent deletion |
 | POST `/:id/restore` | Restore to draft |
 
 Mutations require JSON and existing active-session, session-bound CSRF, allowed
-origin and same-site checks. Archive/restore bodies are `{}`. Only validated
+origin and same-site checks. Restore bodies are `{}`; DELETE requires `{confirmPermanentDelete: true}`. Only validated
 fields enter `$set`/`$unset`; IDs, slugs, nameKey, images, archive flags, timestamps
 and MongoDB operators are not writable through generic bodies. Invalid IDs and
 input return 400, unauthenticated 401, CSRF/origin 403, missing records 404,
@@ -142,31 +150,10 @@ or ImageKit assets are used or modified, and no `.env` file is loaded by tests.
 Responsive coverage includes 360, 393, 768, 1024 and 1440px, with screenshots in
 ignored `test-results/`.
 
-For manual checks, use only approved hotel menu content:
-
-1. Start the app, sign in, open Restaurant Management, and add a category draft.
-   Edit its name/description/order and verify the slug remains stable.
-2. Open Menu Items and add a dish under that category. Try a blank name and
-   negative price, then enter verified content and save the draft.
-3. Publish the dish while the category is draft; reload `/restaurant` and verify
-   it stays hidden. Publish the category and verify the dish and category filter.
-4. Edit or clear a price; verify Price on request. Assign multiple categories
-   and tags; verify search and filters. Mark unavailable and verify its label.
-5. Unpublish the category and verify its dishes disappear. Archive and restore
-   the category; confirm it remains unpublished and dishes are retained.
-6. Archive/restore a dish; confirm restoration leaves a draft. Cancel an archive
-   dialog with Escape and verify keyboard focus returns to the action button.
-7. Search/filter both lists, navigate pagination, and check the item form on a
-   mobile viewport. Make an unsaved edit, cancel navigation, and verify retention.
-8. Sign out and open any admin restaurant URL; verify the login redirect.
-9. For a photo check, use an existing saved dish and an approved JPEG, PNG or
-   WebP photo no larger than 5 MB. Open **Edit item**, select the photo, add
-   descriptive alternative text, and upload. Verify the preview and public
-   `/restaurant` listing. Try changing the alternative text, replacing the
-   photo, and removing it only after confirming the removal dialog.
-10. Confirm that `/restaurant` uses the uploaded image with its alt text while
-    retaining menu filtering, INR prices, the restaurant-level vegetarian label and availability
-    labels. Do not use a test photo against the live ImageKit account.
+For manual checks, use a staging copy and follow the exact steps in
+[Restaurant deletion and recovery](restaurant-deletion.md). Do not test permanent
+deletion against live hotel records or media. Existing photo upload/replacement,
+search, pricing and visibility workflows remain covered by isolated tests.
 
 Website settings are managed separately at `/admin/settings`; see
 [Website settings management](admin-settings.md). Room management and room

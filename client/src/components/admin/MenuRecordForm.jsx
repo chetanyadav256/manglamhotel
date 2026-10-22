@@ -58,7 +58,7 @@ export default function MenuRecordForm({ record, kind, categories = [] }) {
         },
       });
       saved.current = true;
-      navigate(listPath, { state: { message: record ? 'Changes saved.' : 'Draft created. Review the details before publishing.' } });
+      navigate(listPath, { state: { message: record ? 'Changes saved.' : item ? 'Menu item added. You can now edit it to add a photo.' : 'Category added.' } });
     } catch (failure) { setError(failure.message); }
     finally { pending.current = false; setSaving(false); }
   }
@@ -66,8 +66,8 @@ export default function MenuRecordForm({ record, kind, categories = [] }) {
     <form className="admin-room-form admin-menu-form" onSubmit={submit} noValidate>
       <fieldset disabled={saving}>
         <legend className="sr-only">{item ? 'Menu item' : 'Category'} details</legend>
-        <MenuStatus record={record || {}} />
-        <p className="admin-field-hint">New records are drafts. Publication is managed separately from the list.</p>
+        <MenuStatus record={record || { isPublished: true }} />
+        <p className="admin-field-hint">New records are published when added. Dishes appear under their published categories. You can unpublish a record from the list.</p>
         <label htmlFor="menu-name">{item ? 'Dish name' : 'Category name'} (required)</label><input {...field('name')} required maxLength={maxName} autoComplete="off" />{fieldError('name')}
         {!item && <p className="admin-field-hint">{record ? `Slug: ${record.slug}. Renaming keeps the existing slug.` : 'A unique slug is generated automatically. Category names must be unique, including archived categories.'}</p>}
         <label htmlFor="menu-description">Description (optional)</label><textarea {...field('description')} rows={5} maxLength={maxDescription} />{fieldError('description')}
@@ -85,7 +85,7 @@ export default function MenuRecordForm({ record, kind, categories = [] }) {
         <p className="admin-field-hint">0–100000. Lower numbers appear first.</p>
         {item && !record && <p className="admin-field-hint">Save this dish first, then choose Edit item to upload its optional food photo.</p>}
         {error && <p className="admin-form-error mt-6" role="alert">{error}</p>}
-        <div className="admin-room-actions mt-6"><button className="button button-primary" type="submit">{saving ? 'Saving…' : record ? 'Save changes' : 'Create draft'}</button><button className="button button-outline" type="button" onClick={() => navigate(listPath)}>Cancel</button></div>
+        <div className="admin-room-actions mt-6"><button className="button button-primary" type="submit">{saving ? 'Saving…' : record ? 'Save changes' : item ? 'Add Menu Item' : 'Add Category'}</button><button className="button button-outline" type="button" onClick={() => navigate(listPath)}>Cancel</button></div>
       </fieldset>
     </form>
     {item && record && <AdminMenuImage item={record} onStateChange={setPhotoState} />}

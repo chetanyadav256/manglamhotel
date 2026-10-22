@@ -76,7 +76,7 @@ test('new dishes must be saved first; invalid file feedback and unsaved-photo wa
   await expect(page.locator('input[type=file]')).toHaveCount(0);
   await page.getByLabel('Dish name').fill('Saved fixture dish');
   await page.locator('.menu-category-editor input[type=checkbox]').first().check();
-  await page.getByRole('button', { name: 'Create draft' }).click();
+  await page.getByRole('button', { name: 'Add Menu Item' }).click();
   await page.getByRole('article', { name: 'Saved fixture dish' }).getByRole('link', { name: 'Edit item' }).click();
   await page.getByLabel('Select food photo').setInputFiles({ name: 'bad.gif', mimeType: 'image/gif', buffer: png });
   await expect(photo(page).getByRole('alert')).toContainText('Select one non-empty');

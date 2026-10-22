@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const menuCategorySchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, minlength: 1, maxlength: 100 },
   nameKey: { type: String, select: false },
+  referenceRevision: { type: Number, default: 0, select: false },
   slug: {
     type: String,
     required: true,

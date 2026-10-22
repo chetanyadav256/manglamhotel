@@ -7,6 +7,7 @@ import { createApp } from '../../server/src/app.js';
 import Room from '../../server/src/models/Room.js';
 import MenuCategory from '../../server/src/models/MenuCategory.js';
 import MenuItem from '../../server/src/models/MenuItem.js';
+import MenuImageCleanupJob from '../../server/src/models/MenuImageCleanupJob.js';
 import SiteSettings from '../../server/src/models/SiteSettings.js';
 import { createOpaqueToken, hashSessionToken } from '../../server/src/security/adminAuth.js';
 
@@ -78,15 +79,17 @@ function applyUpdate(record, update) {
 }
 
 function query(getValue) {
-  let skip = 0; let limit = Infinity; let sort;
+  let skip = 0; let limit = Infinity; let sort; let session;
   return {
+    session(value) { session = value; return this; },
+    then(resolve, reject) { return this.lean().then(resolve, reject); },
     maxTimeMS() { return this; },
     select() { return this; },
     sort(value) { sort = value; return this; },
     skip(value) { skip = value; return this; },
     limit(value) { limit = value; return this; },
     async lean() {
-      let data = await getValue();
+      let data = await getValue(session);
       if (Array.isArray(data)) {
         if (sort) data.sort((a, b) => {
           for (const [key, direction] of Object.entries(sort)) {
@@ -106,6 +109,7 @@ export async function startRoomFixture({ imageStorage } = {}) {
   const rooms = new Map();
   const categories = new Map();
   const items = new Map();
+  const cleanupJobs = new Map();
   const settings = {
     singletonKey: 'primary',
     hotelName: 'Manglam Hotel & Restaurant',
@@ -185,8 +189,34 @@ export async function startRoomFixture({ imageStorage } = {}) {
   };
   const state = { ready: true, failure: null, sessionActive: true, imagePersistenceFailure: false };
   const check = () => { if (state.failure) throw state.failure; };
+  // Snapshot transactions with optimistic write-conflict retries. These are an
+  // isolated test adapter, not a live MongoDB engine or a production lock.
+  const menuCollections = [categories, items, cleanupJobs];
+  const transaction = async (work) => {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      check();
+      const original = new Map(menuCollections.map((map) => [map, structuredClone(map)]));
+      const session = { records: new Map(menuCollections.map((map) => [map, structuredClone(map)])) };
+      const result = await work(session);
+      await state.beforeMenuCommit?.();
+      const writes = [];
+      for (const map of menuCollections) {
+        const before = original.get(map); const after = session.records.get(map);
+        for (const id of new Set([...before.keys(), ...after.keys()])) {
+          if (JSON.stringify(before.get(id)) !== JSON.stringify(after.get(id))) writes.push({ map, id, before: before.get(id), after: after.get(id) });
+        }
+      }
+      if (writes.some(({ map, id, before }) => JSON.stringify(map.get(id)) !== JSON.stringify(before))) continue;
+      if (state.transactionFailure) throw Object.assign(new Error('Fixture transaction failure'), { name: 'MongoNetworkError' });
+      for (const { map, id, after } of writes) { if (after === undefined) map.delete(id); else map.set(id, after); }
+      if (state.lostMenuCommitAcknowledgement) { state.lostMenuCommitAcknowledgement = false; throw Object.assign(new Error('Fixture lost commit acknowledgement'), { name: 'MongoNetworkError' }); }
+      return result;
+    }
+    throw Object.assign(new Error('Fixture transaction retries exhausted'), { name: 'MongoNetworkError' });
+  };
   function menuModel(Model, records) {
     const checkMenu = () => { check(); if (state.menuFailure) throw state.menuFailure; };
+    const rows = (session) => session?.records.get(records) || records;
     const validate = async (values) => {
       const document = new Model(values);
       await document.validate();
@@ -194,37 +224,56 @@ export async function startRoomFixture({ imageStorage } = {}) {
       record._id = String(record._id);
       if (record.category) record.category = String(record.category);
       if (record.categories) record.categories = record.categories.map(String);
+      if (record.itemId) record.itemId = String(record.itemId);
       return record;
     };
-    const unique = (record) => {
+    const unique = (record, collection) => {
       if (Model !== MenuCategory) return;
       for (const key of ['slug', 'nameKey']) {
         if (record[key] === undefined) continue;
-        if ([...records.values()].some((existing) => existing._id !== record._id && existing[key] === record[key])) {
+        if ([...collection.values()].some((existing) => existing._id !== record._id && existing[key] === record[key])) {
           throw Object.assign(new Error('Fixture duplicate key'), { code: 11000, keyPattern: { [key]: 1 } });
         }
       }
     };
-    return {
-      find: (filter) => query(() => { checkMenu(); return [...records.values()].filter((record) => matches(record, filter)); }),
-      findOne: (filter) => query(() => { checkMenu(); return [...records.values()].find((record) => matches(record, filter)) ?? null; }),
-      countDocuments: (filter) => { const result = Promise.resolve().then(() => { checkMenu(); return [...records.values()].filter((record) => matches(record, filter)).length; }); result.maxTimeMS = () => result; return result; },
-      create: async (values) => {
+    const api = {
+      db: { transaction },
+      find: (filter) => query((session) => { checkMenu(); return [...rows(session).values()].filter((record) => matches(record, filter)); }),
+      findOne: (filter) => query((session) => { checkMenu(); return [...rows(session).values()].find((record) => matches(record, filter)) ?? null; }),
+      countDocuments: (filter) => query((session) => { checkMenu(); return [...rows(session).values()].filter((record) => matches(record, filter)).length; }),
+      create: async (values, options = {}) => {
         checkMenu();
+        if (Array.isArray(values)) { const result = []; for (const value of values) result.push(await api.create(value, options)); return result; }
+        const collection = rows(options.session);
         const record = await validate({ ...values, createdAt: new Date(), updatedAt: new Date() });
-        unique(record); records.set(record._id, record); return structuredClone(record);
+        unique(record, collection); collection.set(record._id, record); return structuredClone(record);
       },
-      updateOne: async (filter, update) => {
+      updateOne: async (filter, update, options = {}) => {
         checkMenu();
-        const current = [...records.values()].find((record) => matches(record, filter));
+        if (Model === MenuImageCleanupJob && state.cleanupPersistenceFailure) throw Object.assign(new Error('Fixture cleanup persistence failure'), { name: 'MongoNetworkError' });
+        const collection = rows(options.session);
+        let current = [...collection.values()].find((record) => matches(record, filter));
+        if (!current && options.upsert) {
+          current = await validate({ ...filter, ...update.$setOnInsert }); collection.set(current._id, current);
+          return { matchedCount: 0, modifiedCount: 0, upsertedCount: 1 };
+        }
         if (!current) return { matchedCount: 0, modifiedCount: 0 };
         applyUpdate(current, update);
         return { matchedCount: 1, modifiedCount: 1 };
       },
+      deleteOne: async (filter, options = {}) => {
+        checkMenu();
+        if (Model === MenuImageCleanupJob && state.cleanupClearFailure) throw Object.assign(new Error('Fixture cleanup clear failure'), { name: 'MongoNetworkError' });
+        const collection = rows(options.session);
+        const current = [...collection.values()].find((record) => matches(record, filter));
+        if (!current) return { deletedCount: 0 };
+        collection.delete(current._id); return { deletedCount: 1 };
+      },
       findOneAndUpdate: (filter, update, options) => query(async () => {
         checkMenu();
+        const collection = rows(options.session);
         if (!options.runValidators || options.returnDocument !== 'after') throw new Error('Required update options missing.');
-        const current = [...records.values()].find((record) => matches(record, filter));
+        const current = [...collection.values()].find((record) => matches(record, filter));
         if (!current) return null;
         const imageFailure = update.$inc?.imageVersion ? state.menuImageWriteFailure : null;
         if (imageFailure) state.menuImageWriteFailure = null;
@@ -233,13 +282,13 @@ export async function startRoomFixture({ imageStorage } = {}) {
         const next = structuredClone(current);
         applyUpdate(next, update); next.updatedAt = new Date();
         await validate(next);
-        // Simulate the database's atomic compare-and-set after asynchronous validation.
-        if (!matches(records.get(current._id), filter)) return null;
-        unique(next); records.set(next._id, next);
+        if (!collection.has(current._id) || !matches(collection.get(current._id), filter)) return null;
+        unique(next, collection); collection.set(next._id, next);
         if (imageFailure === 'after') throw writeError();
         return next;
       }),
     };
+    return api;
   }
   pipelineRoom.collection.updateOne = async (filter, update) => {
     check();
@@ -305,6 +354,7 @@ export async function startRoomFixture({ imageStorage } = {}) {
     },
     MenuCategory: menuModel(MenuCategory, categories),
     MenuItem: menuModel(MenuItem, items),
+    MenuImageCleanupJob: menuModel(MenuImageCleanupJob, cleanupJobs),
     SiteSettings: {
       findOne: (filter) => query(() => {
         check();
@@ -327,7 +377,7 @@ export async function startRoomFixture({ imageStorage } = {}) {
   const server = createApp({ models, isDatabaseReady: () => state.ready, imageStorage: testImageStorage, adminConfig: { allowedOrigins: [fixtureOrigin], production: false } }).listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   return {
-    rooms, categories, items, settings, models, state, admin, session, token, csrf, imageStorage: testImageStorage, storageState, reservationWrites,
+    rooms, categories, items, cleanupJobs, settings, models, state, admin, session, token, csrf, imageStorage: testImageStorage, storageState, reservationWrites,
     url: `http://127.0.0.1:${server.address().port}`,
     close: () => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   };

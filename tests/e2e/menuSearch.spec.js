@@ -24,7 +24,7 @@ test('admin selects multiple categories, edits tags and preserves legacy images 
   await expect(page.getByLabel('Vegetarian indicator')).toHaveCount(0);
   await expect(page.getByText('Non-vegetarian', { exact: true })).toHaveCount(0);
   await page.getByRole('checkbox', { name: 'Fixture second' }).focus(); await page.keyboard.press('Space');
-  await page.getByRole('checkbox', { name: 'Fixture draft (draft)' }).check();
+  await page.getByRole('checkbox', { name: 'Fixture draft' }).check();
   await page.getByLabel('Search tags (optional)').fill('  CURRY  ');
   await page.getByRole('button', { name: 'Add tag', exact: true }).click();
   await page.getByLabel('Search tags (optional)').fill('curry'); await page.keyboard.press('Enter');
@@ -34,14 +34,14 @@ test('admin selects multiple categories, edits tags and preserves legacy images 
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page).toHaveURL('/admin/restaurant/items');
   const card = page.getByRole('article', { name: 'Legacy fixture', exact: true });
-  await expect(card).toContainText('Fixture first, Fixture second, Fixture draft (draft)');
+  await expect(card).toContainText('Fixture first, Fixture second, Fixture draft (unpublished)');
   await expect(card).toContainText('Tags: curry');
   expect(fixture.items.get(dish._id).price).toBe(99.5);
   expect(fixture.items.get(dish._id).vegetarian).toBe(false);
   await page.getByLabel('Filter by category').selectOption(categories[1]._id);
   await page.getByRole('button', { name: 'Apply filters' }).click(); await expect(card).toBeVisible();
   await card.getByRole('link', { name: 'Edit item' }).click();
-  for (const name of ['Fixture first', 'Fixture second', 'Fixture draft (draft)']) await page.getByRole('checkbox', { name, exact: true }).uncheck();
+  for (const name of ['Fixture first', 'Fixture second', 'Fixture draft']) await page.getByRole('checkbox', { name, exact: true }).uncheck();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Select 1 to 50 active categories');
   await page.getByRole('checkbox', { name: 'Fixture second' }).check();

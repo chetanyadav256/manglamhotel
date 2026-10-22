@@ -4,7 +4,7 @@ import { UtensilsCrossed } from 'lucide-react';
 
 export function MenuStatus({ record }) {
   const status = record.isArchived ? 'archived' : record.isPublished ? 'published' : 'draft';
-  return <span className={`admin-room-status status-${status}`}>{status === 'archived' ? 'Archived · Unpublished' : status === 'published' ? 'Published' : 'Draft · Unpublished'}</span>;
+  return <span className={`admin-room-status status-${status}`}>{status === 'archived' ? 'Previously archived' : status === 'published' ? 'Published' : 'Unpublished'}</span>;
 }
 
 export function MenuPhoto({ image, name }) {
@@ -26,7 +26,7 @@ export default function MenuRecordCard({ record, kind, categories = [], onAction
       {item && <MenuPhoto image={record.image} name={record.name} />}
       <div><h2 id={`record-${record.id}`}>{record.name}</h2>
         {item ? <>
-          <p className="admin-field-hint">Categories: {categories.map((category) => `${category.name}${category.isArchived ? ' (archived)' : !category.isPublished ? ' (draft)' : ''}`).join(', ') || 'Categories no longer exist'}</p>
+          <p className="admin-field-hint">Categories: {categories.map((category) => `${category.name}${category.isArchived ? ' (archived)' : !category.isPublished ? ' (unpublished)' : ''}`).join(', ') || 'Categories no longer exist'}</p>
           {record.tags?.length > 0 && <p className="admin-field-hint">Tags: {record.tags.join(', ')}</p>}
           <p>{record.price == null ? 'Price on request' : money.format(record.price)}</p>
         </> : <p className="admin-field-hint">Slug: {record.slug}</p>}
@@ -40,7 +40,8 @@ export default function MenuRecordCard({ record, kind, categories = [], onAction
         <Link className="button button-outline" to={`/admin/restaurant/${kind}/${record.id}/edit`}>Edit {noun}</Link>
         <button type="button" className="button button-outline" onClick={() => onAction(record.isPublished ? 'unpublish' : 'publish')}>{record.isPublished ? 'Unpublish' : 'Publish'} {noun}</button>
         {item && <button type="button" className="button button-outline" onClick={() => onAction(record.isAvailable ? 'unavailable' : 'available')}>Mark {record.isAvailable ? 'unavailable' : 'available'}</button>}
-        <button type="button" className="button button-outline" onClick={() => onAction('archive')}>Archive {noun}</button>
-      </>}</div>
+      </>}
+      <button type="button" className="button button-outline admin-menu-delete" onClick={() => onAction('delete')}>Delete {noun}</button>
+    </div>
   </article>;
 }
