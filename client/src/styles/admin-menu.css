@@ -18,3 +18,11 @@
 .admin-menu-record-summary { display: grid; gap: 0 20px; }
 .admin-menu-record-summary > div { min-width: 0; }
 @media (min-width: 768px) { .admin-menu-record-summary { grid-template-columns: 140px minmax(0, 1fr); } }
+
+.menu-category-editor { margin-block: 1.5rem; max-height: 24rem; overflow-y: auto; }
+.menu-category-editor legend { font-weight: 600; }
+.menu-category-editor .admin-menu-checkbox { min-height: 44px; overflow-wrap: anywhere; }
+.menu-tags-editor { margin-block: 1.5rem; }
+.menu-tags-editor input { min-width: 0; flex: 1 1 12rem; }
+.menu-tag-list { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .75rem; }
+.menu-tag-list li { display: flex; align-items: center; gap: .5rem; max-width: 100%; overflow-wrap: anywhere; }

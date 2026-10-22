@@ -1,3 +1,4 @@
+import { normalizeMenuText } from '../../../../shared/menu.js';
 import { useState } from 'react';
 import { UtensilsCrossed } from 'lucide-react';
 import { menuCategories as defaultCategories, menuItems as defaultItems } from '../../data/menu.js';
@@ -8,7 +9,7 @@ import MenuItemCard from './MenuItemCard.jsx';
 function sortCategories(categories) {
   return categories
     .map((category, index) => ({ category, index }))
-    .filter(({ category }) => category.isPublished === true)
+    .filter(({ category }) => category.isPublished === true && !category.isArchived)
     .sort((first, second) => (
       (first.category.sortOrder ?? first.index) - (second.category.sortOrder ?? second.index)
     ))
@@ -22,11 +23,14 @@ function sortCategories(categories) {
  * }} props
  */
 export default function MenuListing({ categories = defaultCategories, items = defaultItems }) {
+  const [search, setSearch] = useState('');
+  const normalizedSearch = normalizeMenuText(search);
+  const categoryIds = (item) => item.categoryIds ?? (item.categoryId ? [item.categoryId] : []);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const publishedCategories = sortCategories(categories);
   const publishedCategoryIds = new Set(publishedCategories.map((category) => category.id));
-  const publishedItems = items.filter((item) => (
-    item.isPublished === true && publishedCategoryIds.has(item.categoryId)
+  const publishedItems = [...new Map(items.map((item) => [item.id, item])).values()].filter((item) => (
+    item.isPublished === true && !item.isArchived && categoryIds(item).some((id) => publishedCategoryIds.has(id))
   ));
   const activeCategoryId = publishedCategories.some((category) => category.id === selectedCategoryId)
     ? selectedCategoryId
@@ -34,6 +38,10 @@ export default function MenuListing({ categories = defaultCategories, items = de
   const visibleCategories = activeCategoryId === null
     ? publishedCategories
     : publishedCategories.filter((category) => category.id === activeCategoryId);
+
+  const searchItems = publishedItems.filter((item) =>
+    (activeCategoryId === null || categoryIds(item).includes(activeCategoryId))
+    && [item.name, ...(item.tags || [])].some((value) => normalizeMenuText(value).includes(normalizedSearch)));
 
   return (
     <section className="restaurant-menu" aria-labelledby="restaurant-menu-heading">
@@ -57,14 +65,22 @@ export default function MenuListing({ categories = defaultCategories, items = de
         </div>
       ) : (
         <>
+          <div className="menu-search">
+            <label htmlFor="public-menu-search">Search dishes or tags</label>
+            <div><input id="public-menu-search" type="search" placeholder="Search dishes or tags..." maxLength={150} value={search} onChange={(event) => setSearch(event.target.value)} />
+              <button className="button button-outline" type="button" disabled={!search} onClick={() => { setSearch(''); document.getElementById('public-menu-search').focus(); }}>Clear search</button></div>
+          </div>
           <CategoryNavigation
             categories={publishedCategories}
             activeCategoryId={activeCategoryId}
             onCategoryChange={setSelectedCategoryId}
           />
           <div className="menu-category-sections" aria-live="polite">
-            {visibleCategories.map((category) => {
-              const categoryItems = publishedItems.filter((item) => item.categoryId === category.id);
+            {normalizedSearch || activeCategoryId === null ? <>
+              <p role="status">{searchItems.length ? `${searchItems.length} ${searchItems.length === 1 ? 'dish' : 'dishes'} found.` : 'No dishes match your search. Try another dish name or tag, or choose a different category.'}</p>
+              <div className="menu-item-grid">{searchItems.map((item) => <MenuItemCard key={item.id} item={item} />)}</div>
+            </> : visibleCategories.map((category) => {
+              const categoryItems = publishedItems.filter((item) => categoryIds(item).includes(category.id));
 
               return (
                 <section

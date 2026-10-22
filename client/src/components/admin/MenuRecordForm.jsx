@@ -1,3 +1,6 @@
+import { menuCategoryIds, normalizeMenuTags, MAX_MENU_CATEGORIES } from '../../../../shared/menu.js';
+import MenuCategoriesEditor from './MenuCategoriesEditor.jsx';
+import MenuTagsEditor from './MenuTagsEditor.jsx';
 import { useRef, useState } from 'react';
 import { Link, useBeforeUnload, useBlocker, useNavigate } from 'react-router';
 import { useAdminAuth } from '../../app/useAdminAuth.js';
@@ -12,8 +15,8 @@ export default function MenuRecordForm({ record, kind, categories = [] }) {
   const listPath = item ? '/admin/restaurant/items' : '/admin/restaurant';
   const initial = {
     name: record?.name || '', description: record?.description || '', displayOrder: String(record?.displayOrder ?? 0),
-    category: record?.category || '', price: record?.price == null ? '' : String(record.price),
-    vegetarian: record?.vegetarian == null ? '' : String(record.vegetarian), isAvailable: record?.isAvailable !== false,
+    categories: menuCategoryIds(record || {}), tags: record?.tags || [], tagDraft: '', price: record?.price == null ? '' : String(record.price),
+    isAvailable: record?.isAvailable !== false,
   };
   const [values, setValues] = useState(initial);
   const [errors, setErrors] = useState({});
@@ -38,7 +41,9 @@ export default function MenuRecordForm({ record, kind, categories = [] }) {
     if (values.description.trim().length > maxDescription) invalid.description = `Use at most ${maxDescription} characters.`;
     if (!/^\d+$/.test(values.displayOrder) || Number(values.displayOrder) > 100000) invalid.displayOrder = 'Enter a whole number from 0 to 100000.';
     if (item) {
-      if (!categories.some((entry) => entry.id === values.category && !entry.isArchived)) invalid.category = 'Select an active category. Restore an archived category first if needed.';
+      if (!values.categories.length || values.categories.length > MAX_MENU_CATEGORIES || !values.categories.every((id) => categories.some((entry) => entry.id === id && !entry.isArchived))) invalid.categories = 'Select 1 to 50 active categories. Deselect or restore archived categories first.';
+      try { normalizeMenuTags(values.tags); } catch (failure) { invalid.tags = failure.message; }
+      if (values.tagDraft.trim()) invalid.tags = 'Choose Add tag or clear the tag input before saving.';
       if (values.price !== '' && (!/^\d+(\.\d{1,2})?$/.test(values.price) || Number(values.price) > 10000000)) invalid.price = 'Enter a non-negative INR amount up to 10000000 with at most two decimal places, or leave blank.';
     }
     setErrors(invalid); setError('');
@@ -49,7 +54,7 @@ export default function MenuRecordForm({ record, kind, categories = [] }) {
         method: record ? 'PATCH' : 'POST',
         body: {
           name: values.name.trim(), description: values.description.trim(), displayOrder: Number(values.displayOrder),
-          ...(item ? { category: values.category, price: values.price === '' ? null : Number(values.price), vegetarian: values.vegetarian === '' ? null : values.vegetarian === 'true', isAvailable: values.isAvailable } : {}),
+          ...(item ? { categories: values.categories, tags: normalizeMenuTags(values.tags), price: values.price === '' ? null : Number(values.price), isAvailable: values.isAvailable } : {}),
         },
       });
       saved.current = true;
@@ -68,14 +73,10 @@ export default function MenuRecordForm({ record, kind, categories = [] }) {
         <label htmlFor="menu-description">Description (optional)</label><textarea {...field('description')} rows={5} maxLength={maxDescription} />{fieldError('description')}
         {item && <>
           {!categories.some((entry) => !entry.isArchived) && <p className="admin-field-hint">No active categories. <Link className="contact-link" to="/admin/restaurant">Add or restore a category</Link> before saving a dish.</p>}
-          <label htmlFor="menu-category">Category (required)</label><select {...field('category')} required><option value="">Select a category</option>
-            {record?.category && !categories.some((entry) => entry.id === record.category) && <option value={record.category} disabled>Category no longer exists — choose another</option>}
-            {categories.map((entry) => <option key={entry.id} value={entry.id} disabled={entry.isArchived}>{entry.name}{entry.isArchived ? ' (archived)' : !entry.isPublished ? ' (draft)' : ''}</option>)}
-          </select>{fieldError('category')}
-          <p className="admin-field-hint">Both the category and the dish must be published to appear publicly.</p>
+          <MenuCategoriesEditor categories={categories} selected={values.categories} onChange={(ids) => change('categories', ids)} error={errors.categories} />
+          <MenuTagsEditor tags={values.tags} draft={values.tagDraft} onDraftChange={(value) => change('tagDraft', value)} onChange={(tags) => change('tags', tags)} error={errors.tags} onError={(message) => setErrors((previous) => ({ ...previous, tags: message }))} />
           <div className="admin-form-columns">
             <div><label htmlFor="menu-price">Price (INR, optional)</label><input {...field('price')} inputMode="decimal" maxLength={16} />{fieldError('price')}<p className="admin-field-hint">Leave blank to clear the price. Customers see Price on request.</p></div>
-            <div><label htmlFor="menu-vegetarian">Vegetarian indicator</label><select {...field('vegetarian')}><option value="">Unspecified</option><option value="true">Vegetarian</option><option value="false">Non-vegetarian</option></select></div>
           </div>
           <label className="admin-menu-checkbox"><input type="checkbox" checked={values.isAvailable} onChange={(event) => change('isAvailable', event.target.checked)} />Available</label>
           <p className="admin-field-hint">Unavailable published dishes remain visible with a Currently unavailable label. There is no online ordering.</p>

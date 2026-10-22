@@ -19,8 +19,9 @@ function valuesAt(record, path) {
   }), [record]);
 }
 
-function matches(record, filter) {
+export function matches(record, filter) {
   return Object.entries(filter).every(([key, expected]) => {
+    if (key === '$and') return expected.every((condition) => matches(record, condition));
     if (key === '$or') return expected.some((condition) => matches(record, condition));
     if (key === '$expr') {
       const [capacityCheck, duplicateCheck] = expected.$let.in.$and;
@@ -34,12 +35,13 @@ function matches(record, filter) {
         + count <= 5
         && !active.some((reservation) => reservation.uploadId === requestedUploadId);
     }
-    const values = valuesAt(record, key);
+    const rawValues = valuesAt(record, key);
+    const values = rawValues.flat();
     if (expected && typeof expected === 'object') {
       if ('$ne' in expected) return values.every((value) => value !== expected.$ne);
       if ('$gt' in expected) return values.some((value) => value > expected.$gt);
       if ('$in' in expected) return values.some((value) => expected.$in.some((entry) => String(entry) === String(value)));
-      if ('$exists' in expected) return values.some((value) => value !== undefined) === expected.$exists;
+      if ('$exists' in expected) return rawValues.some((value) => value !== undefined) === expected.$exists;
       if ('$regex' in expected) return values.some((value) => new RegExp(expected.$regex, expected.$options).test(value));
     }
     return values.some((value) => String(value) === String(expected));
@@ -78,6 +80,7 @@ function applyUpdate(record, update) {
 function query(getValue) {
   let skip = 0; let limit = Infinity; let sort;
   return {
+    maxTimeMS() { return this; },
     select() { return this; },
     sort(value) { sort = value; return this; },
     skip(value) { skip = value; return this; },
@@ -190,6 +193,7 @@ export async function startRoomFixture({ imageStorage } = {}) {
       const record = document.toObject();
       record._id = String(record._id);
       if (record.category) record.category = String(record.category);
+      if (record.categories) record.categories = record.categories.map(String);
       return record;
     };
     const unique = (record) => {
@@ -204,7 +208,7 @@ export async function startRoomFixture({ imageStorage } = {}) {
     return {
       find: (filter) => query(() => { checkMenu(); return [...records.values()].filter((record) => matches(record, filter)); }),
       findOne: (filter) => query(() => { checkMenu(); return [...records.values()].find((record) => matches(record, filter)) ?? null; }),
-      countDocuments: async (filter) => { checkMenu(); return [...records.values()].filter((record) => matches(record, filter)).length; },
+      countDocuments: (filter) => { const result = Promise.resolve().then(() => { checkMenu(); return [...records.values()].filter((record) => matches(record, filter)).length; }); result.maxTimeMS = () => result; return result; },
       create: async (values) => {
         checkMenu();
         const record = await validate({ ...values, createdAt: new Date(), updatedAt: new Date() });

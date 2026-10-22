@@ -1,3 +1,4 @@
+import { menuCategoryIds } from '../../../shared/menu.js';
 import { useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router';
 import { useAdminAuth } from '../app/useAdminAuth.js';
@@ -10,10 +11,10 @@ import '../styles/admin-rooms.css';
 import '../styles/admin-menu.css';
 
 const actionDefinitions = {
-  publish: { verb: 'Publish', method: 'PATCH', body: { isPublished: true }, message: 'Make these details public. Menu items appear only while their category is published and active.' },
-  unpublish: { verb: 'Unpublish', method: 'PATCH', body: { isPublished: false }, message: 'Hide this record from the public menu. Hiding a category also hides its dishes.' },
-  archive: { verb: 'Archive', method: 'DELETE', body: {}, message: 'Unpublish and archive this record. Details, images and associated dishes are retained. Archiving a category hides its dishes.' },
-  restore: { verb: 'Restore', method: 'POST', body: {}, message: 'Restore as an unpublished draft. For dishes, restore their category first. Publication requires a separate action.' },
+  publish: { verb: 'Publish', method: 'PATCH', body: { isPublished: true }, message: 'Make these details public. Menu items appear only while at least one assigned category is published and active.' },
+  unpublish: { verb: 'Unpublish', method: 'PATCH', body: { isPublished: false }, message: 'Hide this record from the public menu. Dishes remain visible in their other published categories.' },
+  archive: { verb: 'Archive', method: 'DELETE', body: {}, message: 'Unpublish and archive this record. Details, images and associated dishes are retained. Dishes remain visible in their other published categories.' },
+  restore: { verb: 'Restore', method: 'POST', body: {}, message: 'Restore as an unpublished draft. For dishes, restore or update their assigned categories first. Publication requires a separate action.' },
   available: { verb: 'Mark available', method: 'PATCH', body: { isAvailable: true }, message: 'Update availability without changing publication. This website does not accept orders.' },
   unavailable: { verb: 'Mark unavailable', method: 'PATCH', body: { isAvailable: false }, message: 'Published dishes stay visible with a Currently unavailable label.' },
 };
@@ -76,7 +77,7 @@ export default function AdminRestaurantPage({ kind = 'categories' }) {
     </form>
     {list.error ? <ManagementState error={list.error} onRetry={list.retry} /> : !result ? <ManagementState>Loading menu records…</ManagementState> : <>
       {!result.data.length && <ManagementState>No {item ? 'menu items' : 'categories'} match these filters. Add a record to create a draft, or adjust your filters.</ManagementState>}
-      <div className="admin-room-list">{result.data.map((record) => <MenuRecordCard key={record.id} record={record} kind={kind} category={categories.result?.data.find((entry) => entry.id === record.category)} onAction={(type) => { setActionError(''); setConfirmation({ record, type }); }} />)}</div>
+      <div className="admin-room-list">{result.data.map((record) => <MenuRecordCard key={record.id} record={record} kind={kind} categories={categories.result?.data.filter((entry) => menuCategoryIds(record).includes(entry.id))} onAction={(type) => { setActionError(''); setConfirmation({ record, type }); }} />)}</div>
       <div className="admin-room-pagination"><p>{result.pagination.total} records · Page {result.pagination.page} of {Math.max(1, result.pagination.totalPages)}</p><div className="admin-room-actions">
         <button className="button button-outline" disabled={result.pagination.page <= 1} onClick={() => setParams({ ...filters, page: String(Number(page) - 1) })}>Previous</button>
         <button className="button button-outline" disabled={result.pagination.page >= result.pagination.totalPages} onClick={() => setParams({ ...filters, page: String(Number(page) + 1) })}>Next</button>

@@ -1,3 +1,4 @@
+import { matches } from '../../tests/fixtures/roomServer.js';
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { app, createApp } from '../src/app.js';
@@ -20,20 +21,14 @@ const publishedRoomId = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const unpublishedRoomId = 'bbbbbbbbbbbbbbbbbbbbbbbb';
 
 function matchesFilter(record, filter) {
-  if (filter.isArchived?.$ne === true && record.isArchived === true) return false;
-  if (filter.isPublished !== undefined && record.isPublished !== filter.isPublished) return false;
-  if (filter._id !== undefined && String(record._id) !== String(filter._id)) return false;
-  if (filter.singletonKey !== undefined && record.singletonKey !== filter.singletonKey) return false;
-  if (filter.category?.$in) {
-    return filter.category.$in.some((categoryId) => String(categoryId) === String(record.category));
-  }
-  return true;
+  return matches(record, filter);
 }
 
 function makeQuery(getRecords) {
   let skip = 0;
   let limit = Infinity;
   return {
+    maxTimeMS() { return this; },
     sort() { return this; },
     skip(value) { skip = value; return this; },
     limit(value) { limit = value; return this; },
@@ -81,7 +76,7 @@ function createFixtureModels(records = {}) {
     },
     MenuItem: {
       find: (filter) => makeQuery(() => items.filter((item) => matchesFilter(item, filter))),
-      countDocuments: async (filter) => items.filter((item) => matchesFilter(item, filter)).length,
+      countDocuments: (filter) => { const result = Promise.resolve(items.filter((item) => matchesFilter(item, filter)).length); result.maxTimeMS = () => result; return result; },
     },
     SiteSettings: {
       findOne: (filter) => makeQuery(() => settings.singletonKey === filter.singletonKey ? settings : null),

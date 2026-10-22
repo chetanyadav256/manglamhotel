@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Leaf, UtensilsCrossed } from 'lucide-react';
+import { useId, useState } from 'react';
+import { UtensilsCrossed } from 'lucide-react';
 
 const rupeeFormatter = new Intl.NumberFormat('en-IN', {
   style: 'currency',
@@ -20,11 +20,12 @@ function formatPrice(priceInRupees) {
  * @param {{item: import('../../data/menu.js').MenuItem}} props
  */
 export default function MenuItemCard({ item }) {
+  const headingId = useId();
   const [imageFailed, setImageFailed] = useState(false);
   const image = item.image?.src && !imageFailed ? item.image : null;
 
   return (
-    <article className="menu-item-card" aria-labelledby={`menu-item-${item.id}`}>
+    <article className="menu-item-card" aria-labelledby={headingId}>
       <div className="menu-item-image">
         {image ? (
           <img
@@ -45,13 +46,8 @@ export default function MenuItemCard({ item }) {
       </div>
       <div className="menu-item-card-content">
         <div className="menu-item-title-row">
-          <h3 id={`menu-item-${item.id}`} className="menu-item-name">{item.name}</h3>
-          {item.isVegetarian === true && (
-            <span className="menu-item-vegetarian" aria-label="Verified vegetarian">
-              <Leaf size={15} aria-hidden="true" />
-              <span>Vegetarian</span>
-            </span>
-          )}
+          <h3 id={headingId} className="menu-item-name">{item.name}</h3>
+
         </div>
         {item.description && <p className="menu-item-description">{item.description}</p>}
         <div className="menu-item-details">

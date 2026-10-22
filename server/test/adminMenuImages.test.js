@@ -188,7 +188,7 @@ test('public photos get responsive ImageKit URLs while publication, pricing and 
   const publicMenu = async () => (await (await fetch(`${fixture.url}/api/menu/items`)).json()).data;
   const [dish] = await publicMenu();
   assert.match(dish.image.src, /tr:w-800,q-80,f-auto/); assert.match(dish.image.srcSet, /480w.*800w.*1280w/);
-  assert.equal(dish.image.alt, 'Fixture photo'); assert.equal(dish.priceInRupees, 45.5); assert.equal(dish.isAvailable, false); assert.equal(dish.isVegetarian, true);
+  assert.equal(dish.image.alt, 'Fixture photo'); assert.equal(dish.priceInRupees, 45.5); assert.equal(dish.isAvailable, false); assert.equal(dish.isVegetarian, undefined);
   fixture.items.get(item._id).isPublished = false; assert.deepEqual(await publicMenu(), []);
 });
 

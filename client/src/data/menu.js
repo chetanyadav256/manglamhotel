@@ -9,12 +9,13 @@
  *
  * @typedef {Object} MenuItem
  * @property {string} id Stable identifier supplied by the content source.
- * @property {string} categoryId Reference to a published MenuCategory.
+ * @property {string[]} categoryIds References to published, nonarchived MenuCategories.
+ * @property {string[]} tags Normalized searchable tags.
+ * @property {string} [categoryId] Deprecated first-category read alias.
  * @property {string} name Owner-approved dish name.
  * @property {string} [description] Optional plain-text description.
  * @property {number} [priceInRupees] Price in INR major units, not paise.
  * @property {{src: string, alt?: string, srcSet?: string}} [image] Approved food photo with optional responsive CDN variants.
- * @property {boolean} [isVegetarian] Show an indicator only when verified true.
  * @property {boolean} [isAvailable] Optional availability status from the content source.
  * @property {boolean} isPublished Unpublished items are never shown to customers.
  */

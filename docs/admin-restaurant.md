@@ -9,7 +9,7 @@ Add/edit routes are `/admin/restaurant/categories/new`,
 
 ## Behavior and validation
 
-- Both lists support literal name search, pagination (12 per UI page), archive
+- Categories support literal name search; dishes support name/tag search, pagination (12 per UI page), archive
   and publication filters. Dishes also filter by category and availability.
 - Categories: required normalized name (1–100 characters), description (up to
   1000), display order (integer 0–100000), generated unique slug, publication.
@@ -17,10 +17,10 @@ Add/edit routes are `/admin/restaurant/categories/new`,
   rejected case-insensitively, including archived names. Existing slugs remain
   stable on rename. Slug collisions retry with random suffixes without overwrites;
   non-Latin names with no ASCII slug use `category` as the base.
-- Dishes: required name (1–150), description (up to 3000), required category,
-  optional INR price (0–10000000, at most two decimals), optional vegetarian
-  true/false, availability, display order (integer 0–100000), publication.
-  `null`/empty-string price clears it. `null` vegetarian clears the indicator.
+- Dishes: required name (1?150), description (up to 3000), 1?50 active categories,
+  up to 15 normalized tags (40 characters each), optional INR price
+  (0?10000000, at most two decimals), availability, display order and publication.
+  `null`/empty-string price clears it. Per-dish vegetarian writes are rejected.
   Prices remain Numbers in INR major units to preserve the public API contract;
   writes reject excess fractional precision and normalize to two decimals.
 - New records are always drafts. Dish availability defaults to true. Publication
@@ -34,12 +34,12 @@ Add/edit routes are `/admin/restaurant/categories/new`,
 - Category archive/unpublication does not change or delete associated dishes.
   Their own publication/availability state is retained. Restoring a category
   leaves it a draft. Republishing it reveals its already-published, active dishes.
-- Public menu responses require both category and dish to be published and
-  nonarchived. Responses use `Cache-Control: no-store`. Already-open pages get
+- Public menu responses require the dish and at least one assigned category
+  to be published and nonarchived. Only eligible category memberships are exposed. Responses use `Cache-Control: no-store`. Already-open pages get
   changes on reload/navigation, with no realtime push or availability guarantees.
 - Unavailable published dishes remain visible with **Currently unavailable**.
-  Missing price shows **Price on request**. Only verified true vegetarian status
-  gets the existing public vegetarian badge; false and unspecified show none.
+  Missing price shows **Price on request**. The restaurant displays one
+  **100% Pure Vegetarian** label; legacy per-dish vegetarian fields stay private.
   The public menu remains view-only, without ordering or reservations.
 - Each saved menu item supports one optional ImageKit photo. New items must be
   saved before photo upload. Photo changes use a separate protected endpoint;
@@ -150,8 +150,8 @@ For manual checks, use only approved hotel menu content:
    negative price, then enter verified content and save the draft.
 3. Publish the dish while the category is draft; reload `/restaurant` and verify
    it stays hidden. Publish the category and verify the dish and category filter.
-4. Edit price and vegetarian status, then clear them; verify Price on request
-   and absence of the vegetarian badge. Mark unavailable and verify its label.
+4. Edit or clear a price; verify Price on request. Assign multiple categories
+   and tags; verify search and filters. Mark unavailable and verify its label.
 5. Unpublish the category and verify its dishes disappear. Archive and restore
    the category; confirm it remains unpublished and dishes are retained.
 6. Archive/restore a dish; confirm restoration leaves a draft. Cancel an archive
@@ -165,7 +165,7 @@ For manual checks, use only approved hotel menu content:
    `/restaurant` listing. Try changing the alternative text, replacing the
    photo, and removing it only after confirming the removal dialog.
 10. Confirm that `/restaurant` uses the uploaded image with its alt text while
-    retaining menu filtering, INR prices, vegetarian indicators and availability
+    retaining menu filtering, INR prices, the restaurant-level vegetarian label and availability
     labels. Do not use a test photo against the live ImageKit account.
 
 Website settings are managed separately at `/admin/settings`; see
@@ -206,3 +206,6 @@ Modified:
 - `tests/fixtures/roomServer.js`
 - `AGENTS.md`
 - `README.md`
+
+See [Menu schema evolution](menu-schema-evolution.md) for the categories/tags
+contract, compatibility policy, query limits, migration and rollback guidance.

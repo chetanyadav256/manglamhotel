@@ -17,7 +17,7 @@ export function MenuPhoto({ image, name }) {
 const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
 const date = (value) => value ? new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }) : 'Not recorded';
 
-export default function MenuRecordCard({ record, kind, category, onAction }) {
+export default function MenuRecordCard({ record, kind, categories = [], onAction }) {
   const item = kind === 'items';
   const noun = item ? 'item' : 'category';
   return <article className="admin-room-row admin-menu-record" aria-labelledby={`record-${record.id}`}>
@@ -26,9 +26,9 @@ export default function MenuRecordCard({ record, kind, category, onAction }) {
       {item && <MenuPhoto image={record.image} name={record.name} />}
       <div><h2 id={`record-${record.id}`}>{record.name}</h2>
         {item ? <>
-          <p className="admin-field-hint">Category: {category?.name || 'Category no longer exists'}{category?.isArchived ? ' (archived)' : category && !category.isPublished ? ' (draft)' : ''}</p>
+          <p className="admin-field-hint">Categories: {categories.map((category) => `${category.name}${category.isArchived ? ' (archived)' : !category.isPublished ? ' (draft)' : ''}`).join(', ') || 'Categories no longer exist'}</p>
+          {record.tags?.length > 0 && <p className="admin-field-hint">Tags: {record.tags.join(', ')}</p>}
           <p>{record.price == null ? 'Price on request' : money.format(record.price)}</p>
-          <p className="admin-field-hint">{record.vegetarian === true ? 'Vegetarian' : record.vegetarian === false ? 'Non-vegetarian' : 'Vegetarian status unspecified'}</p>
         </> : <p className="admin-field-hint">Slug: {record.slug}</p>}
         {record.description && <p className="admin-menu-description">{record.description}</p>}
       </div>

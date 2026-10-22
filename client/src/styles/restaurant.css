@@ -157,7 +157,6 @@
 .menu-item-card-content { padding: 19px 20px 20px; }
 .menu-item-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .menu-item-name { min-width: 0; font: 23px/1.3 var(--font-display); overflow-wrap: anywhere; }
-.menu-item-vegetarian { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; color: #3f6848; font-size: 11px; line-height: 1.4; }
 .menu-item-description { margin-top: 10px; color: var(--color-muted); font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; }
 .menu-item-details { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 14px; margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--color-line); }
 .menu-item-price { font: 20px/1.4 var(--font-display); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -196,3 +195,9 @@
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+.restaurant-pure-vegetarian { display: inline-flex; align-items: center; gap: .5rem; color: var(--color-forest, #254d3b); border: 1px solid currentColor; border-radius: 999px; padding: .5rem 1rem; margin-top: 1.5rem; font-size: .9rem; }
+.menu-search { margin-bottom: 1.5rem; }
+.menu-search label { display: block; margin-bottom: .5rem; font-weight: 600; }
+.menu-search > div { display: flex; flex-wrap: wrap; gap: .75rem; }
+.menu-search input { flex: 1 1 16rem; min-width: 0; width: 100%; min-height: 48px; border: 1px solid #7c887b; border-radius: .5rem; padding: .75rem; background: #fffdf7; }

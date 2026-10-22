@@ -1,3 +1,4 @@
+import { Leaf } from 'lucide-react';
 import { useCallback } from 'react';
 import MenuListing from '../components/restaurant/MenuListing.jsx';
 import useApiData from '../hooks/useApiData.js';
@@ -19,6 +20,7 @@ export default function RestaurantPage() {
       <section className="restaurant-hero" aria-labelledby="restaurant-heading">
         <p className="eyebrow">Restaurant</p>
         <h1 id="restaurant-heading">Manglam Restaurant</h1>
+        <p className="restaurant-pure-vegetarian"><Leaf size={18} aria-hidden="true" />100% Pure Vegetarian</p>
         <p className="restaurant-hero-subtitle">Explore Our Menu</p>
         <span className="gold-rule" aria-hidden="true" />
       </section>

@@ -370,8 +370,11 @@ All room enquiries use React Router links; no booking form is present.
 
 `client/src/data/menu.js` documents normalized `MenuCategory` and `MenuItem`
 contracts and exports empty arrays. Restaurant fetches public menu records,
-filters by category, and supports optional descriptions, INR prices, verified
-vegetarian status, availability, and missing/broken images.
+filters by category, and supports optional descriptions, INR prices, a restaurant-level 100% Pure Vegetarian label, availability, and missing/broken
+images. Menu items support multiple categories and searchable tags. Public
+search matches dish names/tags locally without per-keystroke requests. See
+[Menu schema evolution](docs/menu-schema-evolution.md) for legacy compatibility,
+optional manual migration, indexes and pre-deployment checks.
 `tests/e2e/rooms.spec.js` and `tests/e2e/restaurant.spec.js` use isolated API
 fixtures which are never imported into production. Contact fetches settings
 from the API and falls back to the confirmed centralized client configuration

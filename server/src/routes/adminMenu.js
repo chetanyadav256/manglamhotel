@@ -3,10 +3,13 @@ import { Router } from 'express';
 import { createAdminProtection } from '../security/adminAuth.js';
 import { HttpError, parsePagination, sendPaginated } from '../utils/http.js';
 
+import { MAX_MENU_CATEGORIES, menuCategoryIds, normalizeMenuTags } from '../../../shared/menu.js';
+import { menuCategoryFilter, menuSearchFilter } from '../utils/menu.js';
+
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const validId = (value) => typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
 const categoryFields = ['name', 'description', 'displayOrder', 'isPublished'];
-const itemFields = [...categoryFields, 'category', 'price', 'vegetarian', 'isAvailable'];
+const itemFields = [...categoryFields, 'category', 'categories', 'tags', 'price', 'isAvailable'];
 
 function assertBody(body, allowed) {
   if (!body || typeof body !== 'object' || Array.isArray(body)
@@ -38,9 +41,16 @@ export function validateMenuBody(body, kind, creating = false) {
     values[field] = body[field];
   }
   if (item) {
-    if (creating || Object.hasOwn(body, 'category')) {
-      if (!validId(body.category)) throw new HttpError(400, 'Select a valid category.');
-      values.category = body.category;
+    if (creating || Object.hasOwn(body, 'categories') || Object.hasOwn(body, 'category')) {
+      if (Object.hasOwn(body, 'categories') && Object.hasOwn(body, 'category')) throw new HttpError(400, 'Send categories only, not both category fields.');
+      const ids = Object.hasOwn(body, 'categories') ? body.categories : [body.category];
+      if (!Array.isArray(ids) || !ids.length || ids.length > MAX_MENU_CATEGORIES || !ids.every(validId)) throw new HttpError(400, 'Select 1 to 50 valid categories.');
+      values.categories = [...new Set(ids.map((id) => id.toLowerCase()))];
+      values.category = values.categories[0]; // Deprecated single-category compatibility bridge.
+    }
+    if (Object.hasOwn(body, 'tags')) {
+      try { values.tags = normalizeMenuTags(body.tags); }
+      catch (error) { throw new HttpError(400, error.message); }
     }
     if (Object.hasOwn(body, 'price')) {
       const price = body.price;
@@ -49,10 +59,6 @@ export function validateMenuBody(body, kind, creating = false) {
         || Math.abs(price * 100 - Math.round(price * 100)) > 0.000001) {
         throw new HttpError(400, 'Price must be a non-negative INR amount up to 10000000 with at most two decimal places.');
       } else values.price = Math.round(price * 100) / 100;
-    }
-    if (Object.hasOwn(body, 'vegetarian')) {
-      if (body.vegetarian !== null && typeof body.vegetarian !== 'boolean') throw new HttpError(400, 'Vegetarian must be true, false or null (unspecified).');
-      values.vegetarian = body.vegetarian;
     }
   }
   return values;
@@ -64,8 +70,7 @@ function serialize(record, item) {
     displayOrder: record.displayOrder ?? 0, isPublished: record.isPublished === true,
     isArchived: record.isArchived === true, createdAt: record.createdAt, updatedAt: record.updatedAt,
   };
-  return item ? { ...base, category: String(record.category), price: record.price ?? null,
-    vegetarian: typeof record.vegetarian === 'boolean' ? record.vegetarian : null,
+  return item ? { ...base, categories: menuCategoryIds(record), category: menuCategoryIds(record)[0], tags: record.tags ?? [], price: record.price ?? null,
     isAvailable: record.isAvailable !== false,
     image: record.image ? { src: record.image.url, alt: record.image.alt || '' } : null,
   } : { ...base, slug: record.slug };
@@ -74,7 +79,7 @@ function serialize(record, item) {
 function toUpdate(values) {
   const $set = { ...values };
   const $unset = {};
-  for (const field of ['price', 'vegetarian']) if ($set[field] === null) { delete $set[field]; $unset[field] = 1; }
+  for (const field of ['price']) if ($set[field] === null) { delete $set[field]; $unset[field] = 1; }
   return { $set, ...(Object.keys($unset).length ? { $unset } : {}) };
 }
 
@@ -87,6 +92,10 @@ export function createAdminMenuRouter(options) {
     const category = await MenuCategory.findOne({ _id: id }).lean();
     if (!category) throw new HttpError(400, 'Selected category no longer exists. Choose another category.');
     if (category.isArchived) throw new HttpError(409, 'Selected category is archived. Restore it or choose an active category.');
+  }
+  async function requireCategories(ids) {
+    if (!ids.length) throw new HttpError(400, 'Select at least one active category.');
+    await Promise.all(ids.map(requireCategory));
   }
   async function categoryName(values, id) {
     if (values.name === undefined) return;
@@ -141,13 +150,16 @@ export function createAdminMenuRouter(options) {
         || !['all', 'published', 'draft'].includes(publication)) throw new HttpError(400, 'Invalid search or status filter.');
       const filter = status === 'all' ? {} : { isArchived: status === 'archived' ? true : { $ne: true } };
       if (publication !== 'all') filter.isPublished = publication === 'published';
-      if (search.trim()) filter.name = { $regex: escapeRegex(search.trim()), $options: 'i' };
+      if (search.trim()) {
+        if (item) filter.$and = [menuSearchFilter(search)];
+        else filter.name = { $regex: escapeRegex(search.trim()), $options: 'i' };
+      }
       if (item) {
         const { category, availability = 'all' } = rest;
         delete rest.category; delete rest.availability;
         if (category !== undefined) {
           if (!validId(category)) throw new HttpError(400, 'Invalid category filter.');
-          filter.category = category;
+          filter.$and = [...(filter.$and || []), menuCategoryFilter([category])];
         }
         if (!['all', 'available', 'unavailable'].includes(availability)) throw new HttpError(400, 'Invalid availability filter.');
         if (availability !== 'all') filter.isAvailable = availability === 'available' ? { $ne: false } : false;
@@ -161,7 +173,7 @@ export function createAdminMenuRouter(options) {
     routes.get('/:id', async (request, response) => response.json({ data: serialize(await get(request.params.id), item) }));
     routes.post('/', async (request, response) => {
       const values = validateMenuBody(request.body, kind, true);
-      if (item) await requireCategory(values.category); else await categoryName(values);
+      if (item) await requireCategories(values.categories); else await categoryName(values);
       const record = item
         ? await Model.create({ ...toUpdate(values).$set, isPublished: false, isArchived: false })
         : await createCategory(values);
@@ -170,7 +182,8 @@ export function createAdminMenuRouter(options) {
     routes.patch('/:id', async (request, response) => {
       const values = validateMenuBody(request.body, kind);
       const current = await get(request.params.id);
-      if (item && (values.category !== undefined || values.isPublished === true)) await requireCategory(values.category ?? String(current.category));
+      if (item && Object.hasOwn(request.body, 'category') && menuCategoryIds(current).length > 1) throw new HttpError(409, 'Reload the editor to manage all assigned categories.');
+      if (item && (values.categories !== undefined || values.isPublished === true)) await requireCategories(values.categories ?? menuCategoryIds(current));
       if (!item) await categoryName(values, request.params.id);
       response.json({ data: serialize(await update(request.params.id, { isArchived: { $ne: true } }, toUpdate(values)), item) });
     });
@@ -181,7 +194,7 @@ export function createAdminMenuRouter(options) {
     routes.post('/:id/restore', async (request, response) => {
       assertBody(request.body, []);
       const current = await get(request.params.id);
-      if (item) await requireCategory(String(current.category));
+      if (item) await requireCategories(menuCategoryIds(current));
       response.json({ data: serialize(await update(request.params.id, { isArchived: true }, { $set: { isArchived: false, isPublished: false } }), item) });
     });
     router.use(`/${kind}`, routes);

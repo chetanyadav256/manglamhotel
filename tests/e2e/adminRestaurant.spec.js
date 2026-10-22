@@ -52,9 +52,8 @@ test('category and item lifecycle integrates dashboard, public filtering, availa
   await page.getByRole('link', { name: 'Menu Items', exact: true }).click();
   await page.getByRole('link', { name: 'Add item', exact: true }).click();
   await page.getByLabel('Dish name').fill('Fixture dish');
-  await page.getByLabel('Category (required)', { exact: true }).selectOption([...fixture.categories.keys()][0]);
+  await page.locator('.menu-category-editor input[type=checkbox]').first().check();
   await page.getByLabel('Price (INR').fill('123.45');
-  await page.getByLabel('Vegetarian indicator').selectOption('true');
   await page.getByRole('button', { name: 'Create draft' }).click();
   const dish = card(page, 'Fixture dish');
   await expect(dish.getByText('Draft · Unpublished')).toBeVisible();
@@ -66,14 +65,13 @@ test('category and item lifecycle integrates dashboard, public filtering, availa
   await page.getByRole('link', { name: 'View public menu' }).click();
   await expect(page.locator('.menu-item-card')).toContainText('Fixture dish');
   await expect(page.locator('.menu-item-card')).toContainText('123.45');
-  await expect(page.getByLabel('Verified vegetarian')).toBeVisible();
+  await expect(page.getByText('100% Pure Vegetarian', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Renamed fixture category', exact: true }).click();
   await expect(page.locator('.menu-item-card')).toHaveCount(1);
   await page.goto('/admin/restaurant/items');
   await action(page, dish, 'Mark unavailable');
   await dish.getByRole('link', { name: 'Edit item' }).click();
   await page.getByLabel('Price (INR').fill('');
-  await page.getByLabel('Vegetarian indicator').selectOption('');
   await page.getByLabel('Description').fill('Updated fixture dish description.');
   await page.getByRole('button', { name: 'Save changes' }).click();
   await page.getByLabel('Filter by category').selectOption([...fixture.categories.keys()][0]);
@@ -133,9 +131,9 @@ test('validation, duplicate category errors, failed saves and unsaved changes pr
   await page.getByLabel('Dish name').fill('Fixture dish');
   await page.getByLabel('Price (INR').fill('-1');
   await page.getByRole('button', { name: 'Create draft' }).click();
-  await expect(page.getByText('Select an active category.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Select 1 to 50 active categories.', { exact: false })).toBeVisible();
   await expect(page.getByText('Enter a non-negative INR amount', { exact: false })).toBeVisible();
-  await page.getByLabel('Category (required)', { exact: true }).selectOption([...fixture.categories.keys()][0]);
+  await page.locator('.menu-category-editor input[type=checkbox]').first().check();
   await page.getByLabel('Price (INR').fill('0');
   await page.getByRole('button', { name: 'Create draft' }).click();
   await expect(card(page, 'Fixture dish')).toBeVisible();

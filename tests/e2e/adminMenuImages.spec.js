@@ -54,7 +54,7 @@ test('saved dishes support preview, upload, alt editing, replacement, removal an
   await expect(image).toHaveAttribute('srcset', /480w.*800w.*1280w/);
   await expect(image).toHaveAttribute('loading', 'lazy');
   await expect(page.getByText('Currently unavailable')).toBeVisible();
-  await expect(page.getByLabel('Verified vegetarian')).toBeVisible();
+  await expect(page.getByText('100% Pure Vegetarian', { exact: true })).toBeVisible();
   await expect(page.locator('.menu-item-price')).toContainText('150.25');
   await editor(page);
   await page.getByRole('button', { name: 'Remove photo', exact: true }).click();
@@ -75,7 +75,7 @@ test('new dishes must be saved first; invalid file feedback and unsaved-photo wa
   await expect(page.getByText('Save this dish first', { exact: false })).toBeVisible();
   await expect(page.locator('input[type=file]')).toHaveCount(0);
   await page.getByLabel('Dish name').fill('Saved fixture dish');
-  await page.getByLabel('Category (required)', { exact: true }).selectOption(category._id);
+  await page.locator('.menu-category-editor input[type=checkbox]').first().check();
   await page.getByRole('button', { name: 'Create draft' }).click();
   await page.getByRole('article', { name: 'Saved fixture dish' }).getByRole('link', { name: 'Edit item' }).click();
   await page.getByLabel('Select food photo').setInputFiles({ name: 'bad.gif', mimeType: 'image/gif', buffer: png });

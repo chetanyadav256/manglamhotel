@@ -102,7 +102,7 @@ test('menu filters categories and hides unpublished items using isolated fixture
   await expect(page.getByText('₹1,234.5')).toBeVisible();
   await expect(page.getByText('Price on request', { exact: true })).toBeVisible();
   await expect(page.getByText('Fixture-only description.')).toBeVisible();
-  await expect(page.getByText('Vegetarian')).toBeVisible();
+  await expect(page.getByText('100% Pure Vegetarian', { exact: true })).toBeVisible();
   await expect(page.getByText('Currently unavailable')).toBeVisible();
   await expect(page.getByText('Unpublished Fixture Dish')).toHaveCount(0);
   await expect(page.getByText('Hidden Category Fixture Dish')).toHaveCount(0);

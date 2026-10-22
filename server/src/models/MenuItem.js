@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { MAX_MENU_CATEGORIES, normalizeMenuTags } from '../../../shared/menu.js';
 
 const menuItemImageSchema = new mongoose.Schema({
   url: { type: String, required: true, trim: true, maxlength: 2048, match: /^https:\/\/\S+$/ },
@@ -19,7 +20,14 @@ const imageOperationSchema = new mongoose.Schema({
 const menuItemSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true, minlength: 1, maxlength: 150 },
   description: { type: String, trim: true, maxlength: 3000 },
-  category: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'MenuCategory', index: true },
+  // Retained for legacy records and a first-category rollback bridge.
+  category: { type: mongoose.Schema.Types.ObjectId, required() { return this.categories === undefined; }, ref: 'MenuCategory', index: true },
+  categories: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'MenuCategory' }], default: undefined,
+    validate: (ids) => ids === undefined || (ids.length > 0 && ids.length <= MAX_MENU_CATEGORIES && new Set(ids.map(String)).size === ids.length) },
+  tags: { type: [String], default: undefined, validate: (tags) => {
+    if (tags === undefined) return true;
+    try { return JSON.stringify(normalizeMenuTags(tags)) === JSON.stringify(tags); } catch { return false; }
+  } },
   price: { type: Number, min: 0, validate: Number.isFinite },
   image: { type: menuItemImageSchema, default: undefined },
   imageVersion: { type: Number, default: 0, min: 0, select: false },
@@ -31,6 +39,9 @@ const menuItemSchema = new mongoose.Schema({
   isArchived: { type: Boolean, default: false },
   displayOrder: { type: Number, default: 0, min: 0, max: 100000 },
 }, { timestamps: true, versionKey: false });
+
+menuItemSchema.index({ isPublished: 1, isArchived: 1, categories: 1, displayOrder: 1, _id: 1 });
+menuItemSchema.index({ isArchived: 1, categories: 1, displayOrder: 1, _id: 1 });
 
 menuItemSchema.index({ isPublished: 1, category: 1, displayOrder: 1, _id: 1 });
 menuItemSchema.index({ isArchived: 1, category: 1, displayOrder: 1, _id: 1 });

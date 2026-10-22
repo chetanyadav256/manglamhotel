@@ -58,8 +58,9 @@ export async function getMenuCategories({ signal } = {}) {
   return requestAllPages('/menu/categories', signal);
 }
 
-export async function getMenuItems({ category, signal } = {}) {
-  const query = category ? `?category=${encodeURIComponent(category)}` : '';
+export async function getMenuItems({ category, search, signal } = {}) {
+  const parameters = new URLSearchParams({ ...(category ? { category } : {}), ...(search ? { search } : {}) });
+  const query = parameters.size ? `?${parameters}` : '';
   return requestAllPages(`/menu/items${query}`, signal);
 }
 

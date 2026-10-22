@@ -1,3 +1,5 @@
+import { menuCategoryIds } from '../../../shared/menu.js';
+import { menuCategoryFilter, menuSearchFilter } from '../utils/menu.js';
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { ownsMenuImage } from '../services/menuImageCleanup.js';
@@ -60,10 +62,11 @@ function serializeCategory(category) {
   return result;
 }
 
-function serializeMenuItem(item) {
+function serializeMenuItem(item, publishedIds) {
   const result = {
     id: String(item._id),
-    categoryId: String(item.category),
+    categoryIds: menuCategoryIds(item).filter((id) => publishedIds.has(id)),
+    tags: item.tags ?? [],
     name: item.name,
     isPublished: true,
     isAvailable: item.isAvailable,
@@ -75,7 +78,7 @@ function serializeMenuItem(item) {
     result.image = { src: variants?.[1] || item.image.url, alt: item.image.alt || '',
       ...(variants ? { srcSet: variants.map((url, index) => `${url} ${[480, 800, 1280][index]}w`).join(', ') } : {}) };
   }
-  if (typeof item.vegetarian === 'boolean') result.isVegetarian = item.vegetarian;
+  result.categoryId = result.categoryIds[0]; // Read compatibility for an older cached client.
   return result;
 }
 
@@ -173,6 +176,8 @@ export function createPublicContentRouter({ models, isDatabaseReady }) {
     const query = Object.assign(Object.create(null), request.query);
     const categoryId = query.category;
     delete query.category;
+    const searchFilter = menuSearchFilter(query.search);
+    delete query.search;
     const { page, limit, skip } = parsePagination(query);
     if (categoryId !== undefined && !validObjectId(categoryId)) {
       throw new HttpError(400, 'category must be a valid category ID.');
@@ -184,12 +189,13 @@ export function createPublicContentRouter({ models, isDatabaseReady }) {
       : publishedCategories
         .filter(({ _id }) => String(_id) === categoryId)
         .map(({ _id }) => _id);
-    const filter = { isPublished: true, isArchived: { $ne: true }, category: { $in: categoryIds } };
+    const filter = { isPublished: true, isArchived: { $ne: true }, $and: [menuCategoryFilter(categoryIds), searchFilter] };
     const [items, total] = await Promise.all([
-      models.MenuItem.find(filter).sort({ displayOrder: 1, _id: 1 }).skip(skip).limit(limit).lean(),
-      models.MenuItem.countDocuments(filter),
+      models.MenuItem.find(filter).maxTimeMS(3000).sort({ displayOrder: 1, _id: 1 }).skip(skip).limit(limit).lean(),
+      models.MenuItem.countDocuments(filter).maxTimeMS(3000),
     ]);
-    sendPaginated(response, items.map(serializeMenuItem), page, limit, total);
+    const publishedIds = new Set(publishedCategories.map(({ _id }) => String(_id)));
+    sendPaginated(response, items.map((item) => serializeMenuItem(item, publishedIds)), page, limit, total);
   });
 
   router.get('/site-settings', async (_request, response) => {

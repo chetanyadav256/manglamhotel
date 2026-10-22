@@ -67,7 +67,14 @@ or couple it to the owner's Manglam Furniture project.
   publication or restoration. Availability is independent of publication:
   unavailable published dishes remain visible with Currently unavailable text.
   Prices are optional INR numbers with at most two decimals; null clears them.
-  Vegetarian is true, false or unspecified. Preserve existing image metadata.
+  Manglam Restaurant is 100% vegetarian. Show one restaurant-level label; never
+  offer per-dish vegetarian controls or expose legacy vegetarian values.
+  Menu items use categories (1?50 unique ObjectIds) and optional tags (up to 15,
+  40 characters each, normalized lowercase). Read legacy category only when
+  categories is absent; never backfill at startup. Public visibility requires
+  at least one published, nonarchived category and a published, active dish.
+  Preserve existing image metadata. See docs/menu-schema-evolution.md before
+  changing compatibility fields, indexes or running any manual migration.
 
 ## Contact content
 
